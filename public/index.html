@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#1d2d25" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/styles.css" />
+  <title>OUTPOST ZERO</title>
+</head>
+<body class="hub-page">
+  <main class="hub-shell">
+    <header class="topbar pixel-panel">
+      <div>
+        <div class="eyebrow">SOLO SURVIVAL PROTOTYPE</div>
+        <h1>OUTPOST ZERO</h1>
+        <p class="subtitle">폐허에서 살아남아 기지를 되살려라.</p>
+      </div>
+      <div class="account-stats" id="accountStats"></div>
+    </header>
+
+    <section class="hub-grid">
+      <section class="pixel-panel base-panel">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">BASE 01</span>
+            <h2>전초기지</h2>
+          </div>
+          <button class="btn small" id="moveModeBtn">배치 변경</button>
+        </div>
+
+        <div class="base-world" id="baseWorld">
+          <div class="base-grid" id="baseGrid"></div>
+        </div>
+
+        <div class="synergy-box" id="synergyBox"></div>
+      </section>
+
+      <aside class="side-column">
+        <section class="pixel-panel resource-card">
+          <div class="section-head compact">
+            <div>
+              <span class="eyebrow">PASSIVE PRODUCTION</span>
+              <h2>발전소 생산</h2>
+            </div>
+          </div>
+          <div class="production" id="productionInfo"></div>
+          <button class="btn primary wide" id="collectEnergyBtn">에너지 수집</button>
+        </section>
+
+        <section class="pixel-panel resource-card">
+          <div class="section-head compact">
+            <div>
+              <span class="eyebrow">PERMANENT RESEARCH</span>
+              <h2>에너지 연구</h2>
+            </div>
+          </div>
+          <div id="trainingOptions" class="build-options"></div>
+        </section>
+
+        <section class="pixel-panel build-card">
+          <div class="section-head compact">
+            <div>
+              <span class="eyebrow">BUILD / UPGRADE</span>
+              <h2 id="buildTitle">시설 건설</h2>
+            </div>
+          </div>
+          <div id="buildOptions" class="build-options"></div>
+        </section>
+
+        <section class="pixel-panel story-card">
+          <div class="section-head compact">
+            <div>
+              <span class="eyebrow">ARCHIVE</span>
+              <h2>복구 기록</h2>
+            </div>
+            <button class="btn small" id="storyBtn">기록 보기</button>
+          </div>
+          <p id="storyProgress" class="muted"></p>
+        </section>
+      </aside>
+    </section>
+
+    <section class="deploy pixel-panel">
+      <div>
+        <span class="eyebrow">NEXT SORTIE</span>
+        <h2>12분 생존 작전</h2>
+        <p>적을 막고, 보급 상자를 회수하고, 보스를 처치해 고철과 경험치를 가져오세요.</p>
+      </div>
+      <a href="/game.html" class="btn deploy-btn">출격하기</a>
+    </section>
+  </main>
+
+  <dialog id="storyDialog" class="modal pixel-panel">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">RECOVERED DATA</span>
+        <h2>기지 복구 기록</h2>
+      </div>
+      <button class="btn small" id="closeStoryBtn">닫기</button>
+    </div>
+    <div id="storyList" class="story-list"></div>
+  </dialog>
+
+  <script type="module" src="/js/base.js"></script>
+</body>
+</html>

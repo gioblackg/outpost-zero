@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="theme-color" content="#101915" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/styles.css" />
+  <title>OUTPOST ZERO - Sortie</title>
+</head>
+<body class="game-page">
+  <div id="rotateHint" class="rotate-hint">기기를 가로로 돌려주세요.</div>
+  <div class="game-shell">
+    <canvas id="gameCanvas" width="960" height="540"></canvas>
+
+    <div class="hud top-left pixel-panel compact-hud">
+      <div class="hud-line"><span>HP</span><div class="bar"><i id="hpBar"></i></div><b id="hpText">100/100</b></div>
+      <div class="hud-line"><span>BASE</span><div class="bar base"><i id="baseBar"></i></div><b id="baseText">1000/1000</b></div>
+      <div class="hud-line"><span>XP</span><div class="bar xp"><i id="xpBar"></i></div><b id="xpText">Lv.1</b></div>
+    </div>
+
+    <div class="hud top-center pixel-panel timer-hud">
+      <b id="timerText">12:00</b>
+      <span id="waveText">웨이브 1</span>
+    </div>
+
+    <div class="hud top-right pixel-panel resource-hud">
+      <div><span>고철</span><b id="scrapText">0</b></div>
+      <div><span>처치</span><b id="killText">0</b></div>
+      <button id="soundBtn" class="icon-btn" title="사운드">♪</button>
+    </div>
+
+    <div id="eventBanner" class="event-banner"></div>
+
+    <div class="mobile-controls">
+      <div id="joyBase" class="joystick"><div id="joyKnob"></div></div>
+      <div class="skill-stack">
+        <button id="pulseBtn" class="skill-btn"><span>펄스</span><small id="pulseCd">READY</small></button>
+        <button id="dashBtn" class="skill-btn secondary"><span>대시</span><small id="dashCd">READY</small></button>
+      </div>
+    </div>
+
+    <div id="levelUp" class="overlay hidden">
+      <section class="choice-modal pixel-panel">
+        <span class="eyebrow">LEVEL UP</span>
+        <h2>강화를 선택하세요</h2>
+        <p id="rerollInfo" class="muted"></p>
+        <div id="upgradeChoices" class="upgrade-grid"></div>
+        <button id="rerollBtn" class="btn small hidden">선택지 다시 보기</button>
+      </section>
+    </div>
+
+    <div id="endScreen" class="overlay hidden">
+      <section class="choice-modal pixel-panel end-modal">
+        <span class="eyebrow">SORTIE COMPLETE</span>
+        <h2 id="endTitle">작전 종료</h2>
+        <p id="endReason"></p>
+        <div id="endRewards" class="end-rewards"></div>
+        <a href="/" class="btn primary wide">기지로 귀환</a>
+      </section>
+    </div>
+
+    <div id="debugPanel" class="debug-panel hidden">
+      <button id="debugTimeBtn">+60초</button>
+      <button id="debugBossBtn">보스</button>
+      <button id="debugXpBtn">레벨업</button>
+    </div>
+  </div>
+
+  <script type="module" src="/js/game.js"></script>
+</body>
+</html>
