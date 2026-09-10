@@ -1,4 +1,4 @@
-import { loadMeta, saveMeta, getRunPerks, accountLevelFromXp, loadRun, saveRun, clearRun } from './storage.js?v=4.0.1';
+import { loadMeta, saveMeta, getRunPerks, accountLevelFromXp, loadRun, saveRun, clearRun } from './storage.js?v=4.0.2';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#gameCanvas');
@@ -135,6 +135,7 @@ const FOG_CELL = 72;
 const FOG_COLS = Math.ceil(W / FOG_CELL);
 const FOG_ROWS = Math.ceil(H / FOG_CELL);
 const explored = new Uint8Array(FOG_COLS * FOG_ROWS);
+const visibleFog = new Uint8Array(FOG_COLS * FOG_ROWS);
 
 const STORY_RECORDS = {
   'west-outpost': {title:'기록 01 · 감시망', text:'적 전투체들은 무작위로 움직이지 않는다. 모든 경계 신호가 북쪽 지휘망으로 향하고 있다.'},
@@ -253,6 +254,9 @@ function exploredAt(x,y){
 }
 function updateExploration(force=false){
   fogClock-=force?999:0;
+  // Three explicit fog states are maintained per cell:
+  // 0 = never visited (black), explored=1/visible=0 = remembered (gray), visible=1 = current vision (clear).
+  visibleFog.fill(0);
   const sources=[home,...aliveSquad()];
   for(const src of sources){
     const rad=src===home?270:visionRadiusFor(src);
@@ -260,7 +264,11 @@ function updateExploration(force=false){
     const miny=clamp(Math.floor((src.y-rad)/FOG_CELL),0,FOG_ROWS-1),maxy=clamp(Math.floor((src.y+rad)/FOG_CELL),0,FOG_ROWS-1);
     for(let cy=miny;cy<=maxy;cy++)for(let cx=minx;cx<=maxx;cx++){
       const x=cx*FOG_CELL+FOG_CELL/2,y=cy*FOG_CELL+FOG_CELL/2;
-      if(Math.hypot(x-src.x,y-src.y)<=rad)explored[fogIndex(cx,cy)]=1;
+      if(Math.hypot(x-src.x,y-src.y)<=rad){
+        const idx=fogIndex(cx,cy);
+        visibleFog[idx]=1;
+        explored[idx]=1;
+      }
     }
   }
 }
@@ -986,10 +994,16 @@ function drawFogOverlay(){
   const minCx=clamp(Math.floor((cam.x-halfW)/FOG_CELL)-1,0,FOG_COLS-1),maxCx=clamp(Math.floor((cam.x+halfW)/FOG_CELL)+1,0,FOG_COLS-1);
   const minCy=clamp(Math.floor((cam.y-halfH)/FOG_CELL)-1,0,FOG_ROWS-1),maxCy=clamp(Math.floor((cam.y+halfH)/FOG_CELL)+1,0,FOG_ROWS-1);
   for(let cy=minCy;cy<=maxCy;cy++)for(let cx=minCx;cx<=maxCx;cx++){
-    const x=cx*FOG_CELL,y=cy*FOG_CELL,centerX=x+FOG_CELL/2,centerY=y+FOG_CELL/2;
-    if(currentlyVisible(centerX,centerY))continue;
-    const seen=explored[fogIndex(cx,cy)]===1;
-    ctx.fillStyle=seen?'rgba(4,10,7,.58)':'rgba(2,5,4,.96)';ctx.fillRect(x-1,y-1,FOG_CELL+2,FOG_CELL+2);
+    const x=cx*FOG_CELL,y=cy*FOG_CELL,idx=fogIndex(cx,cy);
+    if(visibleFog[idx]) continue; // current sight: fully clear
+    if(explored[idx]){
+      // Previously explored: keep terrain memory visible as a neutral gray veil.
+      ctx.fillStyle='rgba(88,92,90,.68)';
+    }else{
+      // Never explored: completely black.
+      ctx.fillStyle='rgb(0,0,0)';
+    }
+    ctx.fillRect(x-1,y-1,FOG_CELL+2,FOG_CELL+2);
   }
 }
 

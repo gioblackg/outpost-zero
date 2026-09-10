@@ -106,7 +106,21 @@ button,a{font:inherit}.pixel-panel{background:linear-gradient(#22342b,#18271f);b
 }
 
 
-/* V4.0.1 deploy/version marker */
+/* V4.0.2 deploy/version marker */
 .v4-title-meta{display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap}
 .version-badge{display:inline-flex;align-items:center;justify-content:center;padding:4px 7px;border:2px solid #8ba66e;background:#17271d;color:#dff47c;font-size:10px;font-weight:900;letter-spacing:.08em;box-shadow:0 3px 0 #09110c}
 .game-version-chip{position:absolute;left:max(8px,env(safe-area-inset-left));bottom:max(8px,env(safe-area-inset-bottom));z-index:30;padding:4px 7px;background:#08100bcc;border:1px solid #728978;color:#b8c9b9;font-size:9px;font-weight:900;letter-spacing:.08em;pointer-events:none}
+
+
+/* V4.0.2 UI + Fog hotfix
+   Keep the tactical map and field terminal button in separate vertical zones. */
+.v4-game .minimap-wrap{top:74px;}
+.v4-game .battle-menu-btn{top:248px;}
+@media (max-width:900px){
+  .v4-game .minimap-wrap{top:70px;}
+  .v4-game .battle-menu-btn{top:210px;}
+}
+@media (max-width:760px){
+  .v4-game .minimap-wrap{top:65px;}
+  .v4-game .battle-menu-btn{top:194px;}
+}
