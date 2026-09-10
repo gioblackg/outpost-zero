@@ -1,4 +1,4 @@
-import { loadMeta, saveMeta, getRunPerks } from './storage.js?v=2.0.1';
+import { loadMeta, saveMeta, getRunPerks, accountLevelFromXp } from './storage.js?v=3.0.0';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#gameCanvas');
@@ -48,21 +48,24 @@ let lastTouchTap = 0;
 const cam = { x: W / 2, y: H / 2 };
 const home = { x: W / 2, y: H / 2, r: 90, hp: 1400, maxHp: 1400 };
 const player = {
-  kind: 'player', x: W / 2 + 170, y: H / 2 + 30, r: 16,
+  kind: 'player', type: 'rifle', x: W / 2 + 170, y: H / 2 + 30, r: 16,
   hp: 120 + metaPerks.maxHp, maxHp: 120 + metaPerks.maxHp,
-  baseSpeed: 205, baseDamage: 18 * (1 + metaPerks.damage),
-  baseFireDelay: .40 / (1 + metaPerks.fireRate), fireClock: 0,
+  baseSpeed: 205 * (1 + metaPerks.speed), baseDamage: 17 * (1 + metaPerks.damage),
+  fireClock: 0, burstShots: 0, burstClock: 0, aimAngle: 0, recoil: 0, muzzle: 0,
   invuln: 0
 };
 
-const upgradeLevels = { attack: 0, defense: 0, speed: 0, stim: 0 };
+const upgradeLevels = { attack: 0, defense: 0, speed: 0 };
 let stimRemaining = 0;
 let stimCooldown = 0;
+let bankedKarma = 0;
 
 let allies = [];
 let enemies = [];
 let bullets = [];
 let enemyBullets = [];
+let tracers = [];
+let corpses = [];
 let particles = [];
 let floating = [];
 
@@ -88,7 +91,7 @@ const enemyBases = [
 
 function makeEnemyBase(id,name,type,x,y){
   const d = BASE_TYPES[type];
-  return { id,name,type,x,y,r:d.r,hp:d.hp,maxHp:d.hp,tier:d.tier,alive:true,activated:false,spawnClock:d.respawn,hit:0 };
+  return { id,name,type,x,y,r:d.r,hp:d.hp,maxHp:d.hp,tier:d.tier,alive:true,activated:false,spawnClock:d.respawn,ruinSpawnClock:22+Math.random()*8,hit:0 };
 }
 
 const ENEMY_TYPES = {
@@ -107,14 +110,20 @@ function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function dist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
 function aliveSquad(){ return [player, ...allies.filter(a=>a.hp>0)]; }
 function squadCount(){ return 1 + allies.length; }
-function attackMul(){ return (1 + upgradeLevels.attack * .18); }
-function defenseMul(){ return Math.max(.45, 1 - upgradeLevels.defense * .055); }
+function attackMul(){ return 1 + upgradeLevels.attack * .15; }
+function defenseMul(){
+  const permanent = Math.max(.55, 1 - (metaPerks.defense || 0));
+  const run = Math.max(.55, 1 - upgradeLevels.defense * .055);
+  const stim = stimRemaining > 0 ? .5 : 1;
+  return permanent * run * stim;
+}
 function speedMul(){ return 1 + upgradeLevels.speed * .07; }
-function stimMoveMul(){ return stimRemaining>0 ? 1.35 + upgradeLevels.stim*.035 : 1; }
-function stimFireMul(){ return stimRemaining>0 ? 1.45 + upgradeLevels.stim*.035 : 1; }
-function stimDuration(){ return 3.6 + upgradeLevels.stim*.35; }
-function stimMaxCd(){ return Math.max(7, (16 - upgradeLevels.stim*.6) * (1 - Math.min(.3,metaPerks.stimCd||0))); }
-function karmaRate(){ return 1 + (metaPerks.karmaRate || 0); }
+function stimMoveMul(){ return stimRemaining>0 ? 2 : 1; }
+function stimFireMul(){ return stimRemaining>0 ? 2 : 1; }
+function stimDamageMul(){ return stimRemaining>0 ? 2 : 1; }
+function stimDuration(){ return 10; }
+function stimMaxCd(){ return 30; }
+function karmaRate(){ return 1; }
 
 function ensureAudio(){
   if (!soundOn) return;
@@ -157,14 +166,17 @@ function noise(dur=.06,vol=.06,delay=0){
 function sfx(name){
   if (!soundOn) return;
   const now=performance.now();
-  if(name==='shot' && now-lastShotSfx<65) return;
-  if(name==='kill' && now-lastKillSfx<70) return;
+  if(name==='shot' && now-lastShotSfx<34) return;
+  if(name==='kill' && now-lastKillSfx<55) return;
   if(name==='shot') lastShotSfx=now;
   if(name==='kill') lastKillSfx=now;
   switch(name){
-    case 'shot': tone(175,.045,.07,'square',120); noise(.025,.035); break;
-    case 'hit': tone(90,.06,.075,'sawtooth',55); break;
-    case 'kill': tone(115,.08,.07,'square',72); noise(.055,.05); break;
+    case 'shot': {
+      const pitch=rand(150,188); tone(pitch,.034,.075,'square',pitch*.62); noise(.032,.06); tone(rand(62,78),.055,.035,'sawtooth',42);
+      break;
+    }
+    case 'hit': tone(rand(72,96),.045,.05,'sawtooth',48); noise(.025,.025); break;
+    case 'kill': tone(108,.07,.055,'square',62); noise(.06,.05); break;
     case 'baseHit': tone(72,.13,.10,'sawtooth',45); noise(.08,.07); break;
     case 'alarm': tone(380,.12,.11,'square'); tone(250,.15,.10,'square',null,.14); break;
     case 'exchange': tone(520,.10,.08,'square'); tone(760,.14,.08,'square',null,.09); break;
@@ -208,7 +220,7 @@ function spawnEnemyAt(x,y,kind='raider',ownerBaseId=null,objective='guard'){
   const e={
     x,y,type:kind,ownerBaseId,objective,r:spec.r,
     hp:spec.hp*hpScale,maxHp:spec.hp*hpScale,speed:spec.speed,dmg:spec.dmg*dmgScale,karma:spec.karma,
-    attack:rand(0,.4),hit:0,homeBound:objective==='home',wander:Math.random()*Math.PI*2
+    attack:rand(0,.4),hit:0,kx:0,ky:0,homeBound:objective==='home',wander:Math.random()*Math.PI*2
   };
   enemies.push(e); return e;
 }
@@ -255,14 +267,16 @@ function damageEnemyBase(b,dmg){
   if(!b?.alive) return;
   b.hp-=dmg; b.hit=.10;
   if(b.hp<=0){
-    b.hp=0;b.alive=false;destroyedBases++;runKarma+=60*b.tier;runSalvage+=12*b.tier;
+    b.hp=0;b.alive=false;b.ruinSpawnClock=BASE_TYPES[b.type].final?5:rand(18,28);destroyedBases++;runKarma+=60*b.tier;
     threat=clamp(threat-(7+b.tier*3),0,100);
     burst(b.x,b.y,'#ff8b70',30,260);
     floatingText(b.x,b.y-110,`KARMA +${60*b.tier}`,'#ffd36d',1.2);
     spawnRetaliation(b);
     if(BASE_TYPES[b.type].final){
       finalDestroyed=true;finalHold=12;
-      event('지휘기지 파괴! 12초 동안 역습을 버티세요!',4);
+      event('지휘기지 파괴! 폐허에서 쏟아지는 마지막 역습을 12초 버티세요!',4);
+    } else {
+      event(`${b.name} 파괴 · 폐허에서는 잔존 병력이 계속 출현합니다.`,3.1);
     }
   }
 }
@@ -280,19 +294,59 @@ function nearestCombatTarget(x,y,maxRange=650){
   return target ? {kind:'base',target,d:best} : null;
 }
 
-function fireFriendly(x,y,target,damage,speed=620,size=4){
-  const a=Math.atan2(target.y-y,target.x-x);
-  bullets.push({x,y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,r:size,life:1.25,damage,hit:false});
+function applyFriendlyHit(target,damage,angle){
+  if(!target) return;
+  if(target.hp === undefined) return;
+  target.hp -= damage;
+  target.hit = .12;
+  if(target.kx !== undefined){
+    target.kx += Math.cos(angle) * 58;
+    target.ky += Math.sin(angle) * 58;
+  }
+  burst(target.x,target.y,'#f4d5a1',2,48);
+  if(Math.random()<.55) sfx('hit');
+  if(target.hp<=0) killEnemy(target,angle);
+}
+
+function rifleShot(u,found,baseDamage,soundChance=1){
+  if(!found?.target) return;
+  const t=found.target;
+  const angle=Math.atan2(t.y-u.y,t.x-u.x);
+  u.aimAngle=angle;u.recoil=.10;u.muzzle=.065;
+  const muzzleX=u.x+Math.cos(angle)*23,muzzleY=u.y+Math.sin(angle)*23;
+  const spread=rand(-.018,.018);
+  const endX=t.x+Math.cos(angle+Math.PI/2)*rand(-3,3),endY=t.y+Math.sin(angle+Math.PI/2)*rand(-3,3);
+  tracers.push({x1:muzzleX,y1:muzzleY,x2:endX,y2:endY,life:.07,maxLife:.07});
+  particles.push({x:u.x-Math.sin(angle)*5,y:u.y+Math.cos(angle)*5,vx:-Math.sin(angle)*rand(55,90)-Math.cos(angle)*20,vy:Math.cos(angle)*rand(55,90)-Math.sin(angle)*20,life:.32,color:'#d8b85e',size:2});
+  const damage=baseDamage*attackMul()*stimDamageMul();
+  if(found.kind==='enemy') applyFriendlyHit(t,damage,angle+spread); else damageEnemyBase(t,damage);
+  if(Math.random()<soundChance)sfx('shot');
+}
+
+function updateRifleFire(u,dt,baseDamage,range,cycle,soundChance=1){
+  u.recoil=Math.max(0,(u.recoil||0)-dt);
+  u.muzzle=Math.max(0,(u.muzzle||0)-dt);
+  if((u.burstShots||0)>0){
+    u.burstClock-=dt;
+    if(u.burstClock<=0){
+      const found=nearestCombatTarget(u.x,u.y,range);
+      if(!found){u.burstShots=0;u.fireClock=.18;return;}
+      rifleShot(u,found,baseDamage,soundChance);
+      u.burstShots--;
+      u.burstClock=.09/stimFireMul();
+      if(u.burstShots<=0)u.fireClock=cycle/stimFireMul();
+    }
+    return;
+  }
+  u.fireClock-=dt;
+  if(u.fireClock>0)return;
+  const found=nearestCombatTarget(u.x,u.y,range);
+  if(!found)return;
+  u.burstShots=3;u.burstClock=0;
 }
 
 function autoFirePlayer(dt){
-  player.fireClock-=dt;
-  if(player.fireClock>0) return;
-  const found=nearestCombatTarget(player.x,player.y,650);
-  if(!found) return;
-  player.fireClock=player.baseFireDelay/stimFireMul();
-  fireFriendly(player.x,player.y,found.target,player.baseDamage*attackMul(),660,4);
-  sfx('shot');
+  updateRifleFire(player,dt,player.baseDamage,620,.48,1);
 }
 
 function updatePlayer(dt){
@@ -304,7 +358,7 @@ function updatePlayer(dt){
   if(mag>.08){
     const sp=player.baseSpeed*speedMul()*stimMoveMul();
     player.x+=dx/mag*sp*dt;player.y+=dy/mag*sp*dt;
-    if(stimRemaining>0 && Math.random()<dt*16) particles.push({x:player.x,y:player.y+12,vx:rand(-25,25),vy:rand(20,60),life:.3,color:'#d9f06a',size:3});
+    if(stimRemaining>0 && Math.random()<dt*22) particles.push({x:player.x,y:player.y+12,vx:rand(-25,25),vy:rand(20,60),life:.3,color:'#d9f06a',size:3});
   }
   player.x=clamp(player.x,28,W-28);player.y=clamp(player.y,28,H-28);
   player.invuln=Math.max(0,player.invuln-dt);
@@ -323,7 +377,7 @@ function addAlly(type='rifle'){
   const hp=isFlame?132:88;
   allies.push({
     kind:'ally',type,x:player.x+rand(-35,35),y:player.y+rand(-35,35),r:isFlame?15:13,
-    hp,maxHp:hp,baseSpeed:isFlame?202:215,fireClock:rand(0,.5),invuln:0,slot:allies.length
+    hp,maxHp:hp,baseSpeed:isFlame?202:215,fireClock:rand(0,.5),burstShots:0,burstClock:0,aimAngle:0,recoil:0,muzzle:0,invuln:0,slot:allies.length
   });
   reindexAllies();return true;
 }
@@ -340,7 +394,7 @@ function updateAllies(dt){
   for(let i=allies.length-1;i>=0;i--){
     const a=allies[i];
     if(a.hp<=0){burst(a.x,a.y,'#9edcf1',12,130);floatingText(a.x,a.y-20,'분대원 전사','#ff8e84',1);allies.splice(i,1);reindexAllies();continue;}
-    a.invuln=Math.max(0,a.invuln-dt);a.fireClock-=dt;
+    a.invuln=Math.max(0,a.invuln-dt);if(a.type!=='rifle')a.fireClock-=dt;
     const form=FORMATION[a.slot]||[0,100+a.slot*10];
     let tx=player.x+form[0],ty=player.y+form[1];
     const near=nearestEnemyTo(a.x,a.y,a.type==='flame'?270:520);
@@ -350,20 +404,18 @@ function updateAllies(dt){
     const dx=tx-a.x,dy=ty-a.y,d=Math.hypot(dx,dy);
     if(d>8){const sp=a.baseSpeed*speedMul()*stimMoveMul()*(d>250?1.7:1);a.x+=dx/d*sp*dt;a.y+=dy/d*sp*dt;}
     if(dist(a,home)<HOME_SAFE_RADIUS+35) a.hp=Math.min(a.maxHp,a.hp+3*dt);
+    if(a.type!=='rifle'){a.recoil=Math.max(0,(a.recoil||0)-dt);a.muzzle=Math.max(0,(a.muzzle||0)-dt);}
 
     if(a.type==='rifle'){
-      if(a.fireClock<=0){
-        const found=nearestCombatTarget(a.x,a.y,540);
-        if(found){a.fireClock=.68/(1+metaPerks.fireRate)/stimFireMul();fireFriendly(a.x,a.y,found.target,13*(1+metaPerks.damage)*attackMul(),610,3);if(Math.random()<.25)sfx('shot');}
-      }
+      updateRifleFire(a,dt,12.5*(1+metaPerks.damage),520,.66,.58);
     } else {
       if(a.fireClock<=0){
         let targetInfo=nearestEnemyTo(a.x,a.y,128);
         let target=targetInfo?.target || enemyBases.find(b=>b.alive&&Math.hypot(a.x-b.x,a.y-b.y)<b.r+100);
         if(target){
           a.fireClock=.78/stimFireMul();
-          const dmg=23*(1+metaPerks.damage)*attackMul();
-          const ang=Math.atan2(target.y-a.y,target.x-a.x);
+          const dmg=23*(1+metaPerks.damage)*attackMul()*stimDamageMul();
+          const ang=Math.atan2(target.y-a.y,target.x-a.x);a.aimAngle=ang;a.recoil=.08;a.muzzle=.07;
           for(const e of [...enemies]){
             const dd=dist(a,e);if(dd>142)continue;
             const ea=Math.atan2(e.y-a.y,e.x-a.x);let diff=Math.atan2(Math.sin(ea-ang),Math.cos(ea-ang));
@@ -386,6 +438,10 @@ function chooseEnemyTarget(e){
   if(e.objective==='home'){
     if(nearest && best<190) return nearest;
     return home;
+  }
+  if(e.objective==='ruin' && owner){
+    if(nearest && best<520) return nearest;
+    return owner;
   }
   if(e.objective==='hunt' || !owner || !owner.alive) return nearest||home;
   if(nearest && best<560) return nearest;
@@ -416,7 +472,7 @@ function onHomeHit(dmg){
 function updateEnemies(dt){
   for(const b of enemyBases) b.hit=Math.max(0,b.hit-dt);
   for(let i=enemies.length-1;i>=0;i--){
-    const e=enemies[i];e.hit=Math.max(0,e.hit-dt);e.attack-=dt;
+    const e=enemies[i];e.hit=Math.max(0,e.hit-dt);e.attack-=dt;e.x+=(e.kx||0)*dt;e.y+=(e.ky||0)*dt;e.kx=(e.kx||0)*Math.exp(-9*dt);e.ky=(e.ky||0)*Math.exp(-9*dt);
     const target=chooseEnemyTarget(e);if(!target)continue;
     let dx=target.x-e.x,dy=target.y-e.y,d=Math.hypot(dx,dy)||1;
     const spec=ENEMY_TYPES[e.type];
@@ -478,16 +534,26 @@ function updateEnemyBullets(dt){
   }
 }
 
-function killEnemy(e){
+function killEnemy(e,angle=0){
   const idx=enemies.indexOf(e);if(idx<0)return;
   enemies.splice(idx,1);kills++;runKarma+=e.karma;
-  floatingText(e.x,e.y-22,`+${e.karma} K`,'#ffd36d',.7);burst(e.x,e.y,e.type==='brute'?'#c88998':'#d6b66c',6,100);sfx('kill');
+  corpses.push({x:e.x,y:e.y,r:e.r,type:e.type,vx:Math.cos(angle)*75,vy:Math.sin(angle)*75,life:.55,maxLife:.55,rot:angle});
+  floatingText(e.x,e.y-22,`+${e.karma} K`,'#ffd36d',.7);burst(e.x,e.y,e.type==='brute'?'#c88998':'#d6b66c',5,90);sfx('kill');
 }
 
 function updateEnemyBases(dt){
   for(const b of enemyBases){
-    if(!b.alive)continue;
     const d=dist(player,b);
+    if(!b.alive){
+      b.ruinSpawnClock-=dt;
+      if(b.ruinSpawnClock<=0){
+        const isFinal=BASE_TYPES[b.type].final;
+        b.ruinSpawnClock=isFinal?rand(5,7):rand(20,30)-b.tier;
+        const count=isFinal?Math.min(6,3+b.tier):Math.min(4,1+Math.ceil(b.tier/2));
+        spawnAroundBase(b,count,'ruin',70,155);
+      }
+      continue;
+    }
     if(d<480+b.tier*20)activateBase(b);
     if(!b.activated && threat<45)continue;
     b.spawnClock-=dt;
@@ -520,20 +586,23 @@ function exchangeKarma(){
   if(paused||ended||runKarma<=0)return;
   const station=nearbyExchange();if(!station){event('카르마 교환소 또는 본기지에서 교환할 수 있습니다.',1.8);return;}
   const gain=Math.floor(runKarma*karmaRate());
-  credits+=gain;runKarma=0;sfx('exchange');event(`${station.name} · 크레딧 +${gain}`,2.2);
+  credits+=gain;bankedKarma+=runKarma;runKarma=0;sfx('exchange');event(`${station.name} · 크레딧 +${gain}`,2.2);
   burst(player.x,player.y,'#80d9e8',14,90);
 }
 
 function useStim(){
   if(paused||ended||stimCooldown>0)return;
-  stimRemaining=stimDuration();stimCooldown=stimMaxCd();sfx('stim');event(`스팀팩 가동 · ${stimRemaining.toFixed(1)}초`,1.35);
+  if(!meta.stimUnlocked){event('스팀팩은 상점에서 한 번 구매하면 영구 해금됩니다.',2.1);return;}
+  const cost=player.maxHp/50;
+  if(player.hp<=cost+1){event('체력이 너무 낮아 스팀팩을 사용할 수 없습니다.',1.8);return;}
+  player.hp-=cost;
+  stimRemaining=stimDuration();stimCooldown=stimMaxCd();sfx('stim');event('스팀팩 가동 · 10초간 공격·연사·이동·방어 성능 2배',2.4);
 }
 
 const UPGRADE_DEFS={
-  attack:{name:'공격력',icon:'▲',desc:'분대 전체 피해량 +18% / LV',baseCost:120,growth:1.42},
+  attack:{name:'공격력',icon:'▲',desc:'분대 전체 피해량 +15% / LV',baseCost:120,growth:1.42},
   defense:{name:'방어력',icon:'◆',desc:'분대 전체 받는 피해 약 -5.5% / LV',baseCost:110,growth:1.45},
-  speed:{name:'속도',icon:'»',desc:'분대 이동속도 +7% / LV',baseCost:95,growth:1.43},
-  stim:{name:'스팀팩',icon:'⚡',desc:'지속·가속 상승, 재사용 시간 감소',baseCost:150,growth:1.48}
+  speed:{name:'속도',icon:'»',desc:'분대 이동속도 +7% / LV',baseCost:95,growth:1.43}
 };
 function upgradeCost(id){const d=UPGRADE_DEFS[id],lv=upgradeLevels[id];return Math.floor(d.baseCost*Math.pow(d.growth,lv)/10)*10;}
 function buyUpgrade(id){
@@ -552,11 +621,9 @@ function recruit(type){
 }
 
 function upgradeStatLine(id){
-  const lv=upgradeLevels[id];
   if(id==='attack')return `현재 +${Math.round((attackMul()-1)*100)}%`;
-  if(id==='defense')return `현재 피해 ${Math.round((1-defenseMul())*100)}% 감소`;
-  if(id==='speed')return `현재 +${Math.round((speedMul()-1)*100)}%`;
-  return `지속 ${stimDuration().toFixed(1)}초 · 쿨 ${stimMaxCd().toFixed(1)}초`;
+  if(id==='defense')return `현재 추가 방어 ${Math.round((1-Math.max(.55,1-upgradeLevels.defense*.055))*100)}%`;
+  return `현재 +${Math.round((speedMul()-1)*100)}%`;
 }
 
 function renderBattleMenu(){
@@ -570,11 +637,17 @@ function renderBattleMenu(){
   }
   const rifleCount=allies.filter(a=>a.type==='rifle').length,flameCount=allies.filter(a=>a.type==='flame').length;
   const full=squadCount()>=MAX_SQUAD;
+  const stimCost=700;
   $('#shopList').innerHTML=`
-    <article class="shop-card"><div class="unit-avatar rifle-avatar">R</div><div><strong>소총병</strong><span>원거리 자동사격 · 안정적인 화력</span><small>현재 ${rifleCount}명 · 분대 ${squadCount()}/${MAX_SQUAD}</small></div><button class="btn small" id="buyRifle" ${full||credits<recruitCost('rifle')?'disabled':''}>${full?'FULL':recruitCost('rifle')+' C'}</button></article>
-    <article class="shop-card"><div class="unit-avatar flame-avatar">F</div><div><strong>화염 돌격병</strong><span>근거리 부채꼴 화염 · 밀집 적 처리</span><small>현재 ${flameCount}명 · 체력이 더 높음</small></div><button class="btn small" id="buyFlame" ${full||credits<recruitCost('flame')?'disabled':''}>${full?'FULL':recruitCost('flame')+' C'}</button></article>`;
+    <article class="shop-card"><div class="unit-avatar rifle-avatar">R</div><div><strong>소총병</strong><span>3점사 원거리 화력 · 자동 추종</span><small>현재 ${rifleCount}명 · 분대 ${squadCount()}/${MAX_SQUAD}</small></div><button class="btn small" id="buyRifle" ${full||credits<recruitCost('rifle')?'disabled':''}>${full?'FULL':recruitCost('rifle')+' C'}</button></article>
+    <article class="shop-card"><div class="unit-avatar flame-avatar">F</div><div><strong>화염 돌격병</strong><span>근거리 부채꼴 화염 · 밀집 적 처리</span><small>현재 ${flameCount}명 · 체력이 더 높음</small></div><button class="btn small" id="buyFlame" ${full||credits<recruitCost('flame')?'disabled':''}>${full?'FULL':recruitCost('flame')+' C'}</button></article>
+    <article class="shop-card stim-shop-card"><div class="unit-avatar stim-avatar">S</div><div><strong>스팀팩 · 영구 해금</strong><span>HP 2% 소모 · 10초간 전투 성능 2배</span><small>${meta.stimUnlocked?'이미 영구 해금됨':'한 번 구매하면 이후 모든 출격에서 사용 가능'}</small></div><button class="btn small" id="buyStim" ${meta.stimUnlocked||credits<stimCost?'disabled':''}>${meta.stimUnlocked?'OWNED':stimCost+' C'}</button></article>`;
   $('#buyRifle')?.addEventListener('click',()=>recruit('rifle'));
   $('#buyFlame')?.addEventListener('click',()=>recruit('flame'));
+  $('#buyStim')?.addEventListener('click',()=>{
+    if(meta.stimUnlocked||credits<stimCost)return;
+    credits-=stimCost;meta.stimUnlocked=true;saveMeta(meta);sfx('upgrade');event('스팀팩 영구 해금! R키로 사용할 수 있습니다.',2.4);renderBattleMenu();
+  });
 }
 
 function openBattleMenu(tab='upgrade'){
@@ -603,6 +676,8 @@ function update(dt){
   homeUnderAttack=Math.max(0,homeUnderAttack-dt);homeAlarmClock=Math.max(0,homeAlarmClock-dt);
   for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;if(p.life<=0)particles.splice(i,1);}
   for(let i=floating.length-1;i>=0;i--){const f=floating[i];f.y-=24*dt;f.life-=dt;if(f.life<=0)floating.splice(i,1);}
+  for(let i=tracers.length-1;i>=0;i--){tracers[i].life-=dt;if(tracers[i].life<=0)tracers.splice(i,1);}
+  for(let i=corpses.length-1;i>=0;i--){const c=corpses[i];c.x+=c.vx*dt;c.y+=c.vy*dt;c.vx*=Math.exp(-7*dt);c.vy*=Math.exp(-7*dt);c.life-=dt;if(c.life<=0)corpses.splice(i,1);}
   if(bannerTimer>0){bannerTimer-=dt;if(bannerTimer<=0)$('#eventBanner').classList.remove('show');}
   cam.x+=(player.x-cam.x)*Math.min(1,dt*5);cam.y+=(player.y-cam.y)*Math.min(1,dt*5);
 }
@@ -649,7 +724,7 @@ function drawEnemyBase(b){
   ctx.save();ctx.translate(b.x,b.y);
   if(!b.alive){
     ctx.fillStyle='#3b3a36';ctx.fillRect(-b.r,-b.r*.45,b.r*2,b.r*.9);ctx.strokeStyle='#6c5f57';ctx.lineWidth=5;ctx.strokeRect(-b.r,-b.r*.45,b.r*2,b.r*.9);
-    ctx.fillStyle='#1d231f';for(let i=-2;i<=2;i++)ctx.fillRect(i*22-7,-22+((i+2)%3)*9,14,20+((i+3)%2)*10);ctx.restore();return;
+    ctx.fillStyle='#1d231f';for(let i=-2;i<=2;i++)ctx.fillRect(i*22-7,-22+((i+2)%3)*9,14,20+((i+3)%2)*10);ctx.restore();ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillStyle='#c6a99d';ctx.fillText('잔존 소굴 · 적 계속 출현',b.x,b.y+b.r+22);return;
   }
   ctx.fillStyle=b.hit>0?'#f2d9cb':d.color;ctx.fillRect(-b.r,-b.r*.65,b.r*2,b.r*1.3);
   ctx.strokeStyle='#392827';ctx.lineWidth=7;ctx.strokeRect(-b.r,-b.r*.65,b.r*2,b.r*1.3);
@@ -663,14 +738,20 @@ function drawEnemyBase(b){
 }
 
 function drawUnit(u,isPlayer=false){
-  ctx.save();ctx.translate(u.x,u.y);
   const stim=stimRemaining>0;
+  ctx.save();ctx.translate(u.x,u.y);
   if(isPlayer){
     ctx.fillStyle=u.invuln>0?'#fff':stim?'#d9f06a':'#9edcf1';ctx.fillRect(-15,-14,30,28);ctx.fillStyle='#26372f';ctx.fillRect(-10,-7,7,7);ctx.fillRect(3,-7,7,7);ctx.fillStyle='#d9f06a';ctx.fillRect(-5,8,10,10);
   } else if(u.type==='rifle'){
-    ctx.fillStyle=u.invuln>0?'#fff':stim?'#d9f06a':'#9fc5df';ctx.fillRect(-12,-12,24,24);ctx.fillStyle='#26372f';ctx.fillRect(5,-3,14,5);ctx.fillStyle='#dce7ca';ctx.fillRect(-5,-6,6,6);
+    ctx.fillStyle=u.invuln>0?'#fff':stim?'#d9f06a':'#9fc5df';ctx.fillRect(-12,-12,24,24);ctx.fillStyle='#dce7ca';ctx.fillRect(-5,-6,6,6);
   } else {
-    ctx.fillStyle=u.invuln>0?'#fff':stim?'#ffe48d':'#dc8d55';ctx.fillRect(-14,-13,28,26);ctx.fillStyle='#5d352a';ctx.fillRect(7,-4,15,8);ctx.fillStyle='#ffd08a';ctx.fillRect(-6,-6,7,7);
+    ctx.fillStyle=u.invuln>0?'#fff':stim?'#ffe48d':'#dc8d55';ctx.fillRect(-14,-13,28,26);ctx.fillStyle='#ffd08a';ctx.fillRect(-6,-6,7,7);
+  }
+  if(isPlayer||u.type==='rifle'){
+    ctx.save();ctx.rotate(u.aimAngle||0);const kick=(u.recoil||0)*38;ctx.fillStyle='#26372f';ctx.fillRect(4-kick,-3,19,6);ctx.fillStyle='#52665a';ctx.fillRect(15-kick,-2,10,4);
+    if((u.muzzle||0)>0){ctx.fillStyle='#ffe17a';ctx.fillRect(25-kick,-5,9,10);ctx.fillStyle='#fff3bd';ctx.fillRect(29-kick,-2,9,4);}ctx.restore();
+  } else {
+    ctx.save();ctx.rotate(u.aimAngle||0);ctx.fillStyle='#5d352a';ctx.fillRect(7,-4,15,8);ctx.restore();
   }
   ctx.restore();
   if(!isPlayer){ctx.fillStyle='#0f1511';ctx.fillRect(u.x-u.r,u.y-u.r-8,u.r*2,4);ctx.fillStyle='#7bdba1';ctx.fillRect(u.x-u.r,u.y-u.r-8,u.r*2*(u.hp/u.maxHp),4);}
@@ -681,11 +762,12 @@ function drawWorld(){
   const ox=480-cam.x,oy=270-cam.y;ctx.save();ctx.translate(ox,oy);
   drawGround();drawExchangeStations();drawHome();
   for(const b of enemyBases)drawEnemyBase(b);
+  for(const c of corpses){ctx.save();ctx.globalAlpha=Math.max(0,c.life/c.maxLife);ctx.translate(c.x,c.y);ctx.rotate(c.rot||0);ctx.fillStyle='#6b5d55';ctx.fillRect(-c.r,-c.r*.55,c.r*2,c.r*1.1);ctx.restore();}ctx.globalAlpha=1;
   for(const e of enemies){
     ctx.save();ctx.translate(e.x,e.y);ctx.fillStyle=e.hit>0?'#f2e7d0':ENEMY_TYPES[e.type].color;ctx.fillRect(-e.r,-e.r,e.r*2,e.r*2);ctx.fillStyle='#172019';ctx.fillRect(-e.r+4,-4,5,5);ctx.fillRect(e.r-9,-4,5,5);ctx.restore();
     if(e.type==='brute'||e.type==='gunner'){ctx.fillStyle='#111';ctx.fillRect(e.x-e.r,e.y-e.r-9,e.r*2,4);ctx.fillStyle='#ff887c';ctx.fillRect(e.x-e.r,e.y-e.r-9,e.r*2*(e.hp/e.maxHp),4);}
   }
-  ctx.fillStyle='#fff1a8';for(const b of bullets)ctx.fillRect(b.x-3,b.y-3,6,6);
+  for(const tr of tracers){ctx.save();ctx.globalAlpha=Math.max(0,tr.life/tr.maxLife);ctx.strokeStyle='#ffe79a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(tr.x1,tr.y1);ctx.lineTo(tr.x2,tr.y2);ctx.stroke();ctx.restore();}
   ctx.fillStyle='#ff786f';for(const b of enemyBullets)ctx.fillRect(b.x-3,b.y-3,6,6);
   for(const a of allies)drawUnit(a,false);drawUnit(player,true);
   for(const p of particles){ctx.globalAlpha=Math.max(0,Math.min(1,p.life*2.2));ctx.fillStyle=p.color||'#f0c36d';ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);}ctx.globalAlpha=1;
@@ -712,8 +794,8 @@ function updateHud(){
   $('#karmaText').textContent=runKarma;$('#creditText').textContent=credits;$('#squadText').textContent=`${squadCount()}/${MAX_SQUAD}`;$('#baseCountText').textContent=`${destroyedBases}/${enemyBases.length}`;
   const remain=Math.max(0,GAME_LENGTH-gameTime),m=Math.floor(remain/60),s=Math.floor(remain%60);$('#timerText').textContent=finalDestroyed?`HOLD ${Math.ceil(finalHold)}`:`${m}:${String(s).padStart(2,'0')}`;
   const cmd=enemyBases.find(b=>b.type==='command');$('#missionText').textContent=finalDestroyed?'역습을 버텨라':`지휘기지 HP ${Math.ceil(cmd.hp/cmd.maxHp*100)}% · 거점 ${destroyedBases}/${enemyBases.length}`;
-  $('#stimCd').textContent=stimRemaining>0?`ACTIVE ${stimRemaining.toFixed(1)}`:(stimCooldown<=0?`${keyLabel(meta.settings.stimKey)} · READY`:`${stimCooldown.toFixed(1)}s`);
-  $('#stimBtn').classList.toggle('cooldown',stimCooldown>0&&stimRemaining<=0);$('#stimBtn').classList.toggle('active',stimRemaining>0);
+  $('#stimCd').textContent=!meta.stimUnlocked?`${keyLabel(meta.settings.stimKey)} · LOCK`:(stimRemaining>0?`ACTIVE ${stimRemaining.toFixed(1)}`:(stimCooldown<=0?`${keyLabel(meta.settings.stimKey)} · READY`:`${stimCooldown.toFixed(1)}s`));
+  $('#stimBtn').classList.toggle('cooldown',(!meta.stimUnlocked)||(stimCooldown>0&&stimRemaining<=0));$('#stimBtn').classList.toggle('active',stimRemaining>0);
   const level=threat<30?'LOW':threat<60?'MID':threat<85?'HIGH':'MAX';$('#threatLabel').textContent=level;$('#threatLabel').dataset.level=level;
   const station=nearbyExchange();$('#exchangeBtn').classList.toggle('hidden',!(station&&runKarma>0));if(station&&runKarma>0)$('#exchangeBtn').querySelector('span').textContent=`카르마 ${runKarma} 교환`;
   const alarm=homeUnderAttack>0;$('#baseAlarm').classList.toggle('hidden',!alarm);
@@ -723,14 +805,13 @@ function updateHud(){
 
 function endRun(win,reason){
   if(ended)return;ended=true;paused=true;sfx(win?'win':'lose');
-  const bankedBonus=Math.floor(credits*.03);
-  const earnedScrap=runSalvage + bankedBonus + (win?100:0);
-  const earnedXp=Math.floor(kills*.55 + destroyedBases*42 + gameTime*.11 + (win?150:0));
-  meta.scrap+=earnedScrap;meta.accountXp+=earnedXp;meta.runs++;meta.bestTime=Math.max(meta.bestTime,Math.floor(gameTime));saveMeta(meta);
+  const earnedXp=Math.floor(kills*.62 + destroyedBases*46 + gameTime*.12 + (win?170:0));
+  meta.accountXp+=earnedXp;meta.runs++;if(win)meta.wins=(meta.wins||0)+1;meta.totalKarmaBanked=(meta.totalKarmaBanked||0)+bankedKarma;meta.bestTime=Math.max(meta.bestTime,Math.floor(gameTime));
+  const lv=accountLevelFromXp(meta.accountXp).level;if(lv>=10&&(meta.wins||0)>=1)meta.chapter1Complete=true;saveMeta(meta);
   $('#endTitle').textContent=win?'작전 성공':'작전 실패';$('#endReason').textContent=reason;
   $('#endRewards').innerHTML=`
-    <div class="reward"><span>회수 고철</span><b>+${earnedScrap}</b></div>
     <div class="reward"><span>계정 XP</span><b>+${earnedXp}</b></div>
+    <div class="reward"><span>처치</span><b>${kills}</b></div>
     <div class="reward"><span>파괴 거점</span><b>${destroyedBases}/${enemyBases.length}</b></div>
     <div class="reward"><span>미교환 카르마</span><b>${runKarma}</b></div>`;
   $('#endScreen').classList.remove('hidden');
@@ -801,7 +882,8 @@ if(DEBUG){
   $('#debugThreatBtn').onclick=()=>threat=clamp(threat+20,0,100);
   $('#debugCreditsBtn').onclick=()=>{credits+=1000;renderBattleMenu();};
   $('#debugSquadBtn').onclick=()=>addAlly('rifle');
+  $('#debugStimBtn').onclick=()=>{meta.stimUnlocked=true;saveMeta(meta);event('DEBUG · STIM 해금',1.2);};
 }
 
 // Kick-start nearby enemies only when the player chooses a direction. No random map-wide waves.
-event(`WASD 이동 · 자동사격 · ${keyLabel(meta.settings.stimKey)} 스팀팩 · E 카르마 교환 · U 강화/상점`,5);
+event(`WASD 이동 · 3점사 자동사격 · E 카르마 교환 · U 강화/상점 · ${keyLabel(meta.settings.stimKey)} 스팀팩`,5);

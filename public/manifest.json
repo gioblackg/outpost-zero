@@ -2,8 +2,8 @@
   "name": "OUTPOST ZERO",
   "short_name": "OUTPOST ZERO",
   "start_url": "/",
-  "display": "fullscreen",
-  "orientation": "landscape",
+  "display": "standalone",
   "background_color": "#101915",
-  "theme_color": "#1d2d25"
+  "theme_color": "#14231b",
+  "description": "Top-down solo squad assault prototype"
 }

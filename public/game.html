@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
   <meta name="theme-color" content="#101915" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="/styles.css?v=2.0.1" />
-  <title>OUTPOST ZERO V2 - Sortie</title>
+  <link rel="stylesheet" href="/styles.css?v=3.0.0" />
+  <title>OUTPOST ZERO V3 - Sortie</title>
 </head>
-<body class="game-page v2-game">
+<body class="game-page v2-game v3-game">
   <div id="rotateHint" class="rotate-hint">기기를 가로로 돌려주세요.</div>
   <div class="game-shell">
     <canvas id="gameCanvas" width="960" height="540"></canvas>
@@ -49,7 +49,7 @@
     <div class="mobile-controls">
       <div id="joyBase" class="joystick"><div id="joyKnob"></div></div>
       <div class="skill-stack v2-skill-stack">
-        <button id="stimBtn" class="skill-btn stim-btn"><span>STIM</span><small id="stimCd">R · READY</small></button>
+        <button id="stimBtn" class="skill-btn stim-btn"><span>STIM</span><small id="stimCd">R · LOCK</small></button>
       </div>
     </div>
 
@@ -67,11 +67,11 @@
           <button class="menu-tab" data-tab="shop">상점</button>
         </div>
         <div id="upgradeTab" class="menu-tab-content">
-          <p class="menu-note">강화는 분대 전체에 적용됩니다. 원하는 능력만 계속 올릴 수 있습니다.</p>
+          <p class="menu-note">랜덤 선택 없이 원하는 능력만 계속 강화합니다. 강화는 현재 출격의 분대 전체에 적용됩니다.</p>
           <div id="upgradeList" class="fixed-upgrade-grid"></div>
         </div>
         <div id="shopTab" class="menu-tab-content hidden">
-          <p class="menu-note">플레이어 포함 최대 10명. 동료는 자동으로 따라다니며 전투합니다.</p>
+          <p class="menu-note">동료는 자동으로 따라다니며 전투합니다. 스팀팩은 한 번 해금하면 다음 출격부터도 영구 사용됩니다.</p>
           <div id="shopList" class="shop-grid"></div>
         </div>
         <button id="closeMenuBtn" class="btn wide">전투로 복귀</button>
@@ -100,7 +100,7 @@
         <h2 id="endTitle">작전 종료</h2>
         <p id="endReason"></p>
         <div id="endRewards" class="end-rewards"></div>
-        <a href="/" class="btn primary wide">기지로 귀환</a>
+        <a href="/" class="btn primary wide">메인으로 귀환</a>
       </section>
     </div>
 
@@ -109,9 +109,10 @@
       <button id="debugThreatBtn">위협 +20</button>
       <button id="debugCreditsBtn">+1000 C</button>
       <button id="debugSquadBtn">소총병+</button>
+      <button id="debugStimBtn">STIM 해금</button>
     </div>
   </div>
 
-  <script type="module" src="/js/game.js?v=2.0.1"></script>
+  <script type="module" src="/js/game.js?v=3.0.0"></script>
 </body>
 </html>

@@ -3,105 +3,76 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#1d2d25" />
+  <meta name="theme-color" content="#14231b" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="/styles.css?v=2.0.1" />
+  <link rel="stylesheet" href="/styles.css?v=3.0.0" />
   <title>OUTPOST ZERO</title>
 </head>
-<body class="hub-page">
-  <main class="hub-shell">
-    <header class="topbar pixel-panel">
+<body class="hub-page chapter-hub">
+  <main class="chapter-shell">
+    <header class="chapter-top">
       <div>
-        <div class="eyebrow">SOLO SQUAD ASSAULT · V2</div>
-        <h1>OUTPOST ZERO <small style="font-size:.36em;color:#d9f06a">V2</small></h1>
-        <p class="subtitle">폐허에서 살아남아 기지를 되살려라.</p>
+        <span class="eyebrow">OUTPOST ZERO · SEASON 1</span>
+        <h1>생존자</h1>
       </div>
-      <div class="account-stats" id="accountStats"></div>
+      <div class="compact-profile" id="compactProfile"></div>
     </header>
 
-    <section class="hub-grid">
-      <section class="pixel-panel base-panel">
-        <div class="section-head">
-          <div>
-            <span class="eyebrow">BASE 01</span>
-            <h2>전초기지</h2>
-          </div>
-          <button class="btn small" id="moveModeBtn">배치 변경</button>
+    <section class="chapter-hero pixel-panel">
+      <div class="chapter-copy">
+        <span class="chapter-badge">SEASON 1</span>
+        <h2>혼자 시작해, 분대를 만들어라.</h2>
+        <p>적 거점을 공격하고 카르마를 회수해 캐릭터와 분대를 성장시키세요. 기지 복구는 시즌 1을 완료한 뒤 시작됩니다.</p>
+        <div class="chapter-actions">
+          <a href="/game.html" class="btn primary deploy-main">출격하기</a>
+          <button id="growthBtn" class="btn">성장 현황</button>
         </div>
+      </div>
 
-        <div class="base-world" id="baseWorld">
-          <div class="base-grid" id="baseGrid"></div>
-        </div>
-
-        <div class="synergy-box" id="synergyBox"></div>
-      </section>
-
-      <aside class="side-column">
-        <section class="pixel-panel resource-card">
-          <div class="section-head compact">
-            <div>
-              <span class="eyebrow">PASSIVE PRODUCTION</span>
-              <h2>발전소 생산</h2>
-            </div>
-          </div>
-          <div class="production" id="productionInfo"></div>
-          <button class="btn primary wide" id="collectEnergyBtn">에너지 수집</button>
-        </section>
-
-        <section class="pixel-panel resource-card">
-          <div class="section-head compact">
-            <div>
-              <span class="eyebrow">PERMANENT RESEARCH</span>
-              <h2>에너지 연구</h2>
-            </div>
-          </div>
-          <div id="trainingOptions" class="build-options"></div>
-        </section>
-
-        <section class="pixel-panel build-card">
-          <div class="section-head compact">
-            <div>
-              <span class="eyebrow">BUILD / UPGRADE</span>
-              <h2 id="buildTitle">시설 건설</h2>
-            </div>
-          </div>
-          <div id="buildOptions" class="build-options"></div>
-        </section>
-
-        <section class="pixel-panel story-card">
-          <div class="section-head compact">
-            <div>
-              <span class="eyebrow">ARCHIVE</span>
-              <h2>복구 기록</h2>
-            </div>
-            <button class="btn small" id="storyBtn">기록 보기</button>
-          </div>
-          <p id="storyProgress" class="muted"></p>
-        </section>
-      </aside>
+      <div class="squad-preview" aria-hidden="true">
+        <div class="ground-strip"></div>
+        <div class="pixel-soldier leader"><i></i></div>
+        <div class="pixel-soldier mate one"><i></i></div>
+        <div class="pixel-soldier mate two"><i></i></div>
+        <div class="target-base"></div>
+      </div>
     </section>
 
-    <section class="deploy pixel-panel">
+    <section class="progress-strip pixel-panel">
       <div>
-        <span class="eyebrow">NEXT SORTIE</span>
-        <h2>10분 적 거점 파괴 작전</h2>
-        <p>적을 처치해 카르마를 모으고, 크레딧으로 분대를 키워 10분 안에 적 지휘기지를 파괴하세요.</p>
+        <span class="eyebrow">CHAPTER PROGRESS</span>
+        <strong id="chapterStatus">진행 중</strong>
       </div>
-      <a href="/game.html" class="btn deploy-btn">출격하기</a>
+      <div class="chapter-progress-bar"><i id="chapterProgressBar"></i></div>
+      <b id="chapterProgressText">0%</b>
+    </section>
+
+    <section class="next-chapter pixel-panel locked-chapter">
+      <div>
+        <span class="eyebrow">LOCKED</span>
+        <h3>SEASON 2 · 전초기지 복구</h3>
+        <p>시즌 1 완료 후 폐허가 된 기지를 복구하고 시설을 확장하는 시스템이 열립니다.</p>
+      </div>
+      <span class="lock-mark">🔒</span>
     </section>
   </main>
 
-  <dialog id="storyDialog" class="modal pixel-panel">
+  <dialog id="growthDialog" class="modal pixel-panel growth-dialog">
     <div class="section-head">
       <div>
-        <span class="eyebrow">RECOVERED DATA</span>
-        <h2>기지 복구 기록</h2>
+        <span class="eyebrow">CHARACTER GROWTH</span>
+        <h2>캐릭터 성장 현황</h2>
       </div>
-      <button class="btn small" id="closeStoryBtn">닫기</button>
+      <button id="closeGrowthBtn" class="btn small">닫기</button>
     </div>
-    <div id="storyList" class="story-list"></div>
+    <div id="growthStats" class="growth-stats"></div>
+    <div class="chapter-goals">
+      <article><b>목표 1</b><span>계정 레벨 10 달성</span></article>
+      <article><b>목표 2</b><span>지휘기지 파괴 작전 1회 성공</span></article>
+    </div>
+    <p class="menu-note">레벨이 오르면 기본 공격력·방어력·속도·체력이 조금씩 영구 상승합니다. 시즌 1에서는 기지 업그레이드를 사용하지 않습니다.</p>
   </dialog>
 
-  <script type="module" src="/js/base.js?v=2.0.1"></script>
+  <script type="module" src="/js/base.js?v=3.0.0"></script>
 </body>
 </html>
