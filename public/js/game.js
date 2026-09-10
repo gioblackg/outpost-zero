@@ -1,4 +1,4 @@
-import { loadMeta, saveMeta, getRunPerks, accountLevelFromXp, loadRun, saveRun, clearRun } from './storage.js?v=4.0.0';
+import { loadMeta, saveMeta, getRunPerks, accountLevelFromXp, loadRun, saveRun, clearRun } from './storage.js?v=4.0.1';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#gameCanvas');

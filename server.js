@@ -4,6 +4,7 @@ const path = require('path');
 
 const PORT = process.env.PORT || 3000;
 const ROOT = path.join(__dirname, 'public');
+const APP_VERSION = '4.0.1';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -29,9 +30,15 @@ function safePath(urlPath) {
 }
 
 const server = http.createServer((req, res) => {
+  res.setHeader('X-Outpost-Zero-Version', APP_VERSION);
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
     return res.end('Method Not Allowed');
+  }
+
+  if ((req.url || '').split('?')[0] === '/version') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify({ name: 'OUTPOST ZERO', version: APP_VERSION, build: '2026-09-10' }));
   }
 
   const filePath = safePath(req.url || '/');
@@ -57,5 +64,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`OUTPOST ZERO running on http://localhost:${PORT}`);
+  console.log(`OUTPOST ZERO V${APP_VERSION} running on http://localhost:${PORT}`);
 });
