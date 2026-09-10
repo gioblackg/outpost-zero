@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
   <meta name="theme-color" content="#101915" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="/styles.css?v=3.0.0" />
-  <title>OUTPOST ZERO V3 - Sortie</title>
+  <link rel="stylesheet" href="/styles.css?v=4.0.0" />
+  <title>OUTPOST ZERO V4 - Sortie</title>
 </head>
-<body class="game-page v2-game v3-game">
+<body class="game-page v4-game">
   <div id="rotateHint" class="rotate-hint">기기를 가로로 돌려주세요.</div>
   <div class="game-shell">
     <canvas id="gameCanvas" width="960" height="540"></canvas>
@@ -21,16 +21,15 @@
 
     <div class="hud top-center pixel-panel timer-hud">
       <b id="timerText">10:00</b>
-      <span id="missionText">적 지휘기지를 파괴하라</span>
+      <span id="missionText">북쪽 지휘 신호를 추적하라</span>
     </div>
 
-    <div class="hud top-right pixel-panel resource-hud v2-resource">
+    <div class="hud top-right pixel-panel resource-hud v4-resource">
       <div><span>카르마</span><b id="karmaText">0</b></div>
       <div><span>크레딧</span><b id="creditText">0</b></div>
       <div><span>분대</span><b id="squadText">1/10</b></div>
-      <div><span>거점</span><b id="baseCountText">0/5</b></div>
       <button id="soundBtn" class="icon-btn" title="효과음">🔊</button>
-      <button id="settingsBtn" class="icon-btn" title="설정">⚙</button>
+      <button id="pauseBtn" class="icon-btn pause-icon" title="일시정지">Ⅱ</button>
     </div>
 
     <div class="minimap-wrap pixel-panel">
@@ -45,6 +44,7 @@
     <div id="baseAlarm" class="base-alarm hidden">🚨 본기지 공격 중</div>
     <div id="baseArrow" class="base-arrow hidden"><span>⌁</span><small>BASE</small></div>
     <div id="damageVignette" class="damage-vignette"></div>
+    <div id="terrainHint" class="terrain-hint hidden"></div>
 
     <div class="mobile-controls">
       <div id="joyBase" class="joystick"><div id="joyKnob"></div></div>
@@ -56,10 +56,7 @@
     <div id="battleMenu" class="overlay hidden">
       <section class="choice-modal pixel-panel battle-menu-modal">
         <div class="menu-head">
-          <div>
-            <span class="eyebrow">FIELD TERMINAL</span>
-            <h2>분대 터미널</h2>
-          </div>
+          <div><span class="eyebrow">FIELD TERMINAL</span><h2>분대 터미널</h2></div>
           <div class="menu-wallet"><span>사용 가능</span><b><i id="menuCredit">0</i> C</b></div>
         </div>
         <div class="menu-tabs">
@@ -67,14 +64,36 @@
           <button class="menu-tab" data-tab="shop">상점</button>
         </div>
         <div id="upgradeTab" class="menu-tab-content">
-          <p class="menu-note">랜덤 선택 없이 원하는 능력만 계속 강화합니다. 강화는 현재 출격의 분대 전체에 적용됩니다.</p>
+          <p class="menu-note">원하는 능력만 직접 강화합니다. 공격력·방어력·속도는 현재 출격의 분대 전체에 적용됩니다.</p>
           <div id="upgradeList" class="fixed-upgrade-grid"></div>
         </div>
         <div id="shopTab" class="menu-tab-content hidden">
-          <p class="menu-note">동료는 자동으로 따라다니며 전투합니다. 스팀팩은 한 번 해금하면 다음 출격부터도 영구 사용됩니다.</p>
+          <p class="menu-note">동료는 자동으로 따라다니며 전투합니다. 스팀팩은 한 번 구매하면 영구 해금됩니다.</p>
           <div id="shopList" class="shop-grid"></div>
         </div>
         <button id="closeMenuBtn" class="btn wide">전투로 복귀</button>
+      </section>
+    </div>
+
+    <div id="pauseOverlay" class="overlay hidden">
+      <section class="choice-modal pixel-panel pause-modal-v4">
+        <span class="eyebrow">PAUSED</span>
+        <h2>작전 메뉴</h2>
+        <div id="pauseSnapshot" class="pause-snapshot"></div>
+        <button id="resumeBtn" class="btn primary wide">계속하기</button>
+        <button id="pauseSettingsBtn" class="btn wide">설정</button>
+        <button id="saveHomeBtn" class="btn wide">저장하고 메인으로</button>
+        <button id="abandonBtn" class="btn danger-btn wide">작전 포기</button>
+        <small>작전은 자동 저장됩니다. 메인으로 돌아가도 미교환 카르마와 분대 상태가 유지됩니다.</small>
+      </section>
+    </div>
+
+    <div id="abandonOverlay" class="overlay hidden">
+      <section class="choice-modal pixel-panel confirm-operation-v4">
+        <span class="eyebrow">ABANDON SORTIE</span>
+        <h2>현재 작전을 포기할까요?</h2>
+        <p>미교환 카르마, 현재 크레딧, 분대와 출격 중 강화가 사라집니다. 계정 성장과 영구 스팀팩 해금은 유지됩니다.</p>
+        <div class="confirm-actions"><button id="cancelAbandonBtn" class="btn">취소</button><button id="confirmAbandonBtn" class="btn danger-btn">작전 포기</button></div>
       </section>
     </div>
 
@@ -94,6 +113,27 @@
       </section>
     </div>
 
+    <div id="storyOverlay" class="overlay hidden">
+      <section class="choice-modal pixel-panel story-event-modal">
+        <span id="storyEyebrow" class="eyebrow">FIELD RECORD</span>
+        <h2 id="storyTitle">기록</h2>
+        <p id="storyText"></p>
+        <button id="closeStoryEventBtn" class="btn primary wide">계속</button>
+      </section>
+    </div>
+
+    <div id="introOverlay" class="overlay hidden">
+      <section class="choice-modal pixel-panel intro-modal-v4">
+        <span class="eyebrow">SEASON 1 · 고립</span>
+        <h2>통신 두절.</h2>
+        <div class="intro-lines">
+          <p>분대 신호 없음.</p><p>위치 확인 불가.</p><p>북쪽에서 미확인 전투 신호 감지.</p>
+        </div>
+        <p class="menu-note">적 전투체를 처치하면 ‘카르마’가 축적됩니다. 카르마는 본기지 또는 교환소에서 크레딧으로 변환할 수 있습니다.</p>
+        <button id="startIntroBtn" class="btn primary wide">작전 시작</button>
+      </section>
+    </div>
+
     <div id="endScreen" class="overlay hidden">
       <section class="choice-modal pixel-panel end-modal">
         <span class="eyebrow">SORTIE COMPLETE</span>
@@ -110,9 +150,10 @@
       <button id="debugCreditsBtn">+1000 C</button>
       <button id="debugSquadBtn">소총병+</button>
       <button id="debugStimBtn">STIM 해금</button>
+      <button id="debugRevealBtn">MAP 공개</button>
     </div>
   </div>
 
-  <script type="module" src="/js/game.js?v=3.0.0"></script>
+  <script type="module" src="/js/game.js?v=4.0.0"></script>
 </body>
 </html>

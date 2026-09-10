@@ -1,4 +1,4 @@
-import { loadMeta, saveMeta, getRunPerks, accountLevelFromXp } from './storage.js?v=3.0.0';
+import { loadMeta, saveMeta, getRunPerks, accountLevelFromXp, loadRun, saveRun, clearRun } from './storage.js?v=4.0.0';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#gameCanvas');
@@ -12,6 +12,9 @@ const meta = loadMeta();
 const metaPerks = getRunPerks(meta);
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug');
+const RESUME_REQUESTED = params.has('resume');
+const NEW_REQUESTED = params.has('new');
+if (NEW_REQUESTED) clearRun();
 if (DEBUG) $('#debugPanel').classList.remove('hidden');
 
 const W = 3600;
@@ -44,6 +47,13 @@ let masterGain = null;
 let lastShotSfx = 0;
 let lastKillSfx = 0;
 let lastTouchTap = 0;
+let autosaveClock = 0;
+let settingsReturnToPause = false;
+let storyResumeAfterClose = true;
+let introBlocking = false;
+let lastTerrainLabel = '';
+let terrainHintClock = 0;
+let fogClock = 0;
 
 const cam = { x: W / 2, y: H / 2 };
 const home = { x: W / 2, y: H / 2, r: 90, hp: 1400, maxHp: 1400 };
@@ -73,6 +83,66 @@ const exchangeStations = [
   { id:'west', x: W/2 - 720, y: H/2 + 40, r: 54, name:'서부 카르마 교환소' },
   { id:'east', x: W/2 + 720, y: H/2 - 40, r: 54, name:'동부 카르마 교환소' }
 ];
+
+
+// V4 terrain / fog. The map is still 2D, but cliffs, obstacles, roads and swamps
+// change movement and line of fire so the battlefield no longer feels flat.
+const roads = [
+  {x1:1800,y1:1100,x2:650,y2:650,w:54},
+  {x1:1800,y1:1100,x2:2950,y2:650,w:54},
+  {x1:1800,y1:1100,x2:720,y2:1710,w:54},
+  {x1:1800,y1:1100,x2:2880,y2:1710,w:54},
+  {x1:1800,y1:1100,x2:1800,y2:250,w:58}
+];
+const swamps = [
+  {x:1160,y:1450,r:230,label:'늪지'},
+  {x:2440,y:920,r:190,label:'습지'}
+];
+const forests = [
+  {x:2520,y:690,r:260,label:'폐허 숲'},
+  {x:980,y:820,r:220,label:'수풀 지대'}
+];
+const plateaus = [
+  {x:1420,y:70,w:760,h:410,label:'북부 고지대'},
+  {x:2520,y:1420,w:760,h:590,label:'동남 고지대'}
+];
+const obstacles = [
+  // North plateau cliffs. South gap is the ramp.
+  {type:'rect',x:1420,y:70,w:38,h:400,kind:'cliff'},
+  {type:'rect',x:2142,y:70,w:38,h:400,kind:'cliff'},
+  {type:'rect',x:1420,y:70,w:760,h:34,kind:'cliff'},
+  {type:'rect',x:1420,y:446,w:285,h:34,kind:'cliff'},
+  {type:'rect',x:1895,y:446,w:285,h:34,kind:'cliff'},
+  // South-east plateau cliffs. West-side gap is the ramp.
+  {type:'rect',x:2520,y:1420,w:760,h:34,kind:'cliff'},
+  {type:'rect',x:3242,y:1420,w:38,h:590,kind:'cliff'},
+  {type:'rect',x:2520,y:1976,w:760,h:34,kind:'cliff'},
+  {type:'rect',x:2520,y:1420,w:38,h:190,kind:'cliff'},
+  {type:'rect',x:2520,y:1790,w:38,h:220,kind:'cliff'},
+  // Rocks and ruins.
+  {type:'circle',x:1420,y:1040,r:68,kind:'rock'},
+  {type:'circle',x:1550,y:1390,r:54,kind:'rock'},
+  {type:'circle',x:2060,y:1310,r:62,kind:'rock'},
+  {type:'circle',x:2260,y:1650,r:72,kind:'rock'},
+  {type:'circle',x:900,y:1210,r:58,kind:'rock'},
+  {type:'rect',x:470,y:980,w:170,h:90,kind:'ruin'},
+  {type:'rect',x:2960,y:990,w:180,h:100,kind:'ruin'},
+  {type:'rect',x:1090,y:420,w:150,h:80,kind:'ruin'},
+  {type:'rect',x:2200,y:430,w:150,h:82,kind:'ruin'}
+];
+
+const FOG_CELL = 72;
+const FOG_COLS = Math.ceil(W / FOG_CELL);
+const FOG_ROWS = Math.ceil(H / FOG_CELL);
+const explored = new Uint8Array(FOG_COLS * FOG_ROWS);
+
+const STORY_RECORDS = {
+  'west-outpost': {title:'기록 01 · 감시망', text:'적 전투체들은 무작위로 움직이지 않는다. 모든 경계 신호가 북쪽 지휘망으로 향하고 있다.'},
+  'east-outpost': {title:'기록 02 · 생존 신호', text:'폐허 바깥에서 짧은 구조 신호가 잡혔다. 우리 외에도 살아남은 사람이 있다.'},
+  'factory': {title:'기록 03 · 생산시설', text:'카르마는 단순한 동력원이 아니다. 전투 명령 데이터와 함께 저장되고 있다.'},
+  'fortress': {title:'기록 04 · KARMA PROJECT', text:'인간 장비와의 호환 시험 기록이 발견됐다. 이 기술은 적의 것이 아니었다.'},
+  'command': {title:'기록 05 · 원점', text:'지휘망의 설계 서명은 인간 군 연구소의 것이다. 우리가 만든 것이 우리를 사냥하고 있다.'}
+};
 
 const BASE_TYPES = {
   outpost:  { label:'전초기지', hp:720,  r:62, tier:1, color:'#b85d5d', defender:5, reinforce:9,  respawn:28 },
@@ -108,6 +178,92 @@ const FORMATION = [
 function rand(a,b){ return a + Math.random() * (b-a); }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function dist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
+
+function pointInRect(x,y,r){ return x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h; }
+function pointInCircle(x,y,c){ return Math.hypot(x-c.x,y-c.y)<=c.r; }
+function circleRectCollide(x,y,rad,r){
+  const nx=clamp(x,r.x,r.x+r.w), ny=clamp(y,r.y,r.y+r.h);
+  return Math.hypot(x-nx,y-ny) < rad;
+}
+function positionBlocked(x,y,rad=12){
+  if(x<rad||x>W-rad||y<rad||y>H-rad)return true;
+  for(const o of obstacles){
+    if(o.type==='circle' && Math.hypot(x-o.x,y-o.y)<rad+o.r)return true;
+    if(o.type==='rect' && circleRectCollide(x,y,rad,o))return true;
+  }
+  return false;
+}
+function findOpenPoint(x,y,rad=12){
+  if(!positionBlocked(x,y,rad))return {x,y};
+  for(let ring=1;ring<=8;ring++){
+    for(let i=0;i<12;i++){
+      const a=i/12*Math.PI*2, rr=ring*32;
+      const nx=clamp(x+Math.cos(a)*rr,rad,W-rad),ny=clamp(y+Math.sin(a)*rr,rad,H-rad);
+      if(!positionBlocked(nx,ny,rad))return {x:nx,y:ny};
+    }
+  }
+  return {x:clamp(x,rad,W-rad),y:clamp(y,rad,H-rad)};
+}
+function distancePointToSegment(px,py,x1,y1,x2,y2){
+  const vx=x2-x1,vy=y2-y1,wx=px-x1,wy=py-y1;
+  const c2=vx*vx+vy*vy||1;const t=clamp((wx*vx+wy*vy)/c2,0,1);
+  return Math.hypot(px-(x1+t*vx),py-(y1+t*vy));
+}
+function terrainInfoAt(x,y){
+  for(const z of swamps)if(pointInCircle(x,y,z))return {label:'늪지 · 이동 -22%',speed:.78,vision:1};
+  for(const z of forests)if(pointInCircle(x,y,z))return {label:'수풀 · 시야 감소',speed:.95,vision:.78};
+  for(const z of plateaus)if(pointInRect(x,y,z))return {label:'고지대 · 사거리 +12%',speed:1,vision:1.08,high:true};
+  for(const r of roads)if(distancePointToSegment(x,y,r.x1,r.y1,r.x2,r.y2)<=r.w/2)return {label:'도로 · 이동 +10%',speed:1.10,vision:1};
+  return {label:'',speed:1,vision:1};
+}
+function moveByVector(u,nx,ny,speed,dt){
+  const mul=terrainInfoAt(u.x,u.y).speed;
+  const step=speed*mul*dt;
+  const ox=u.x,oy=u.y;let tx=ox+nx*step,ty=oy+ny*step;
+  if(!positionBlocked(tx,ty,u.r||12)){u.x=tx;u.y=ty;return;}
+  if(!positionBlocked(tx,oy,u.r||12)){u.x=tx;return;}
+  if(!positionBlocked(ox,ty,u.r||12)){u.y=ty;return;}
+  // Small side-step helps followers slide around rocks instead of freezing.
+  const sx=-ny,sy=nx;
+  tx=ox+sx*step*.75;ty=oy+sy*step*.75;
+  if(!positionBlocked(tx,ty,u.r||12)){u.x=tx;u.y=ty;}
+}
+function lineBlocked(x1,y1,x2,y2){
+  const d=Math.hypot(x2-x1,y2-y1);const n=Math.max(2,Math.ceil(d/24));
+  for(let i=1;i<n;i++){
+    const t=i/n,x=x1+(x2-x1)*t,y=y1+(y2-y1)*t;
+    for(const o of obstacles){
+      if(o.type==='circle'&&Math.hypot(x-o.x,y-o.y)<o.r)return true;
+      if(o.type==='rect'&&pointInRect(x,y,o))return true;
+    }
+  }
+  return false;
+}
+function rangeMulAt(x,y){ return terrainInfoAt(x,y).high ? 1.12 : 1; }
+function visionRadiusFor(u){ return 410*(terrainInfoAt(u.x,u.y).vision||1); }
+function currentlyVisible(x,y){
+  if(Math.hypot(x-home.x,y-home.y)<255)return true;
+  for(const u of aliveSquad())if(Math.hypot(x-u.x,y-u.y)<=visionRadiusFor(u))return true;
+  return false;
+}
+function fogIndex(cx,cy){ return cy*FOG_COLS+cx; }
+function exploredAt(x,y){
+  const cx=clamp(Math.floor(x/FOG_CELL),0,FOG_COLS-1),cy=clamp(Math.floor(y/FOG_CELL),0,FOG_ROWS-1);
+  return explored[fogIndex(cx,cy)]===1;
+}
+function updateExploration(force=false){
+  fogClock-=force?999:0;
+  const sources=[home,...aliveSquad()];
+  for(const src of sources){
+    const rad=src===home?270:visionRadiusFor(src);
+    const minx=clamp(Math.floor((src.x-rad)/FOG_CELL),0,FOG_COLS-1),maxx=clamp(Math.floor((src.x+rad)/FOG_CELL),0,FOG_COLS-1);
+    const miny=clamp(Math.floor((src.y-rad)/FOG_CELL),0,FOG_ROWS-1),maxy=clamp(Math.floor((src.y+rad)/FOG_CELL),0,FOG_ROWS-1);
+    for(let cy=miny;cy<=maxy;cy++)for(let cx=minx;cx<=maxx;cx++){
+      const x=cx*FOG_CELL+FOG_CELL/2,y=cy*FOG_CELL+FOG_CELL/2;
+      if(Math.hypot(x-src.x,y-src.y)<=rad)explored[fogIndex(cx,cy)]=1;
+    }
+  }
+}
 function aliveSquad(){ return [player, ...allies.filter(a=>a.hp>0)]; }
 function squadCount(){ return 1 + allies.length; }
 function attackMul(){ return 1 + upgradeLevels.attack * .15; }
@@ -215,6 +371,7 @@ function weightedEnemy(tier=1){
 function spawnEnemyAt(x,y,kind='raider',ownerBaseId=null,objective='guard'){
   if(enemies.length>150) return null;
   const spec=ENEMY_TYPES[kind];
+  const open=findOpenPoint(x,y,spec.r);x=open.x;y=open.y;
   const hpScale=1 + gameTime/1300 + threat*.0022;
   const dmgScale=1 + gameTime/1800 + threat*.0018;
   const e={
@@ -272,6 +429,8 @@ function damageEnemyBase(b,dmg){
     burst(b.x,b.y,'#ff8b70',30,260);
     floatingText(b.x,b.y-110,`KARMA +${60*b.tier}`,'#ffd36d',1.2);
     spawnRetaliation(b);
+    unlockStoryRecord(b.id);
+    saveSnapshot('base-destroyed');
     if(BASE_TYPES[b.type].final){
       finalDestroyed=true;finalHold=12;
       event('지휘기지 파괴! 폐허에서 쏟아지는 마지막 역습을 12초 버티세요!',4);
@@ -282,14 +441,17 @@ function damageEnemyBase(b,dmg){
 }
 
 function nearestCombatTarget(x,y,maxRange=650){
-  let target=null,best=maxRange;
+  const effective=maxRange*rangeMulAt(x,y);
+  let target=null,best=effective;
   for(const e of enemies){
-    const d=Math.hypot(x-e.x,y-e.y); if(d<best){best=d;target=e;}
+    const d=Math.hypot(x-e.x,y-e.y);
+    if(d<best && !lineBlocked(x,y,e.x,e.y)){best=d;target=e;}
   }
   if(target) return {kind:'enemy',target,d:best};
   for(const b of enemyBases){
     if(!b.alive) continue;
-    const d=Math.hypot(x-b.x,y-b.y)-b.r; if(d<best){best=d;target=b;}
+    const d=Math.hypot(x-b.x,y-b.y)-b.r;
+    if(d<best && !lineBlocked(x,y,b.x,b.y)){best=d;target=b;}
   }
   return target ? {kind:'base',target,d:best} : null;
 }
@@ -357,7 +519,7 @@ function updatePlayer(dt){
   const mag=Math.hypot(dx,dy);
   if(mag>.08){
     const sp=player.baseSpeed*speedMul()*stimMoveMul();
-    player.x+=dx/mag*sp*dt;player.y+=dy/mag*sp*dt;
+    moveByVector(player,dx/mag,dy/mag,sp,dt);
     if(stimRemaining>0 && Math.random()<dt*22) particles.push({x:player.x,y:player.y+12,vx:rand(-25,25),vy:rand(20,60),life:.3,color:'#d9f06a',size:3});
   }
   player.x=clamp(player.x,28,W-28);player.y=clamp(player.y,28,H-28);
@@ -375,8 +537,9 @@ function addAlly(type='rifle'){
   if(squadCount()>=MAX_SQUAD) return false;
   const isFlame=type==='flame';
   const hp=isFlame?132:88;
+  const spawn=findOpenPoint(player.x+rand(-35,35),player.y+rand(-35,35),isFlame?15:13);
   allies.push({
-    kind:'ally',type,x:player.x+rand(-35,35),y:player.y+rand(-35,35),r:isFlame?15:13,
+    kind:'ally',type,x:spawn.x,y:spawn.y,r:isFlame?15:13,
     hp,maxHp:hp,baseSpeed:isFlame?202:215,fireClock:rand(0,.5),burstShots:0,burstClock:0,aimAngle:0,recoil:0,muzzle:0,invuln:0,slot:allies.length
   });
   reindexAllies();return true;
@@ -402,7 +565,7 @@ function updateAllies(dt){
       const d=Math.max(1,near.d);tx=near.target.x+(a.x-near.target.x)/d*82;ty=near.target.y+(a.y-near.target.y)/d*82;
     }
     const dx=tx-a.x,dy=ty-a.y,d=Math.hypot(dx,dy);
-    if(d>8){const sp=a.baseSpeed*speedMul()*stimMoveMul()*(d>250?1.7:1);a.x+=dx/d*sp*dt;a.y+=dy/d*sp*dt;}
+    if(d>8){const sp=a.baseSpeed*speedMul()*stimMoveMul()*(d>250?1.7:1);moveByVector(a,dx/d,dy/d,sp,dt);}
     if(dist(a,home)<HOME_SAFE_RADIUS+35) a.hp=Math.min(a.maxHp,a.hp+3*dt);
     if(a.type!=='rifle'){a.recoil=Math.max(0,(a.recoil||0)-dt);a.muzzle=Math.max(0,(a.muzzle||0)-dt);}
 
@@ -412,7 +575,7 @@ function updateAllies(dt){
       if(a.fireClock<=0){
         let targetInfo=nearestEnemyTo(a.x,a.y,128);
         let target=targetInfo?.target || enemyBases.find(b=>b.alive&&Math.hypot(a.x-b.x,a.y-b.y)<b.r+100);
-        if(target){
+        if(target && !lineBlocked(a.x,a.y,target.x,target.y)){
           a.fireClock=.78/stimFireMul();
           const dmg=23*(1+metaPerks.damage)*attackMul()*stimDamageMul();
           const ang=Math.atan2(target.y-a.y,target.x-a.x);a.aimAngle=ang;a.recoil=.08;a.muzzle=.07;
@@ -479,14 +642,14 @@ function updateEnemies(dt){
 
     if(target===home || target===player || target.kind==='ally'){
       if(spec.range){
-        if(d>spec.range*.82){e.x+=dx/d*e.speed*dt;e.y+=dy/d*e.speed*dt;}
-        if(d<=spec.range && e.attack<=0){
+        if(d>spec.range*.82 || lineBlocked(e.x,e.y,target.x,target.y)){moveByVector(e,dx/d,dy/d,e.speed,dt);}
+        if(d<=spec.range && !lineBlocked(e.x,e.y,target.x,target.y) && e.attack<=0){
           e.attack=1.25;const a=Math.atan2(dy,dx);
           enemyBullets.push({x:e.x,y:e.y,vx:Math.cos(a)*340,vy:Math.sin(a)*340,r:4,life:1.5,damage:e.dmg});
           tone(125,.05,.035,'square',95);
         }
       } else {
-        if(d>e.r+(target.r||15)+3){e.x+=dx/d*e.speed*dt;e.y+=dy/d*e.speed*dt;}
+        if(d>e.r+(target.r||15)+3){moveByVector(e,dx/d,dy/d,e.speed,dt);}
         if(d<=e.r+(target.r||15)+5 && e.attack<=0){
           e.attack=e.type==='brute'?1.15:.82;
           if(target===home)onHomeHit(e.dmg);else hitSquadUnit(target,e.dmg);
@@ -495,7 +658,7 @@ function updateEnemies(dt){
     } else {
       // target is its own base: return to guard perimeter
       const desired=target.r+rand(100,160);
-      if(d>desired){e.x+=dx/d*e.speed*.6*dt;e.y+=dy/d*e.speed*.6*dt;}
+      if(d>desired){moveByVector(e,dx/d,dy/d,e.speed*.6,dt);}
     }
   }
 }
@@ -525,6 +688,7 @@ function updateEnemyBullets(dt){
   for(let i=enemyBullets.length-1;i>=0;i--){
     const b=enemyBullets[i];b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;
     if(b.life<=0){enemyBullets.splice(i,1);continue;}
+    if(positionBlocked(b.x,b.y,b.r||3)){burst(b.x,b.y,'#e7c784',3,55);enemyBullets.splice(i,1);continue;}
     let hit=false;
     for(const u of aliveSquad()){
       if(Math.hypot(b.x-u.x,b.y-u.y)<b.r+u.r){hitSquadUnit(u,b.damage);hit=true;break;}
@@ -537,6 +701,7 @@ function updateEnemyBullets(dt){
 function killEnemy(e,angle=0){
   const idx=enemies.indexOf(e);if(idx<0)return;
   enemies.splice(idx,1);kills++;runKarma+=e.karma;
+  if(kills===1) event('미확인 에너지 감지 · KARMA가 축적됩니다.',2.8);
   corpses.push({x:e.x,y:e.y,r:e.r,type:e.type,vx:Math.cos(angle)*75,vy:Math.sin(angle)*75,life:.55,maxLife:.55,rot:angle});
   floatingText(e.x,e.y-22,`+${e.karma} K`,'#ffd36d',.7);burst(e.x,e.y,e.type==='brute'?'#c88998':'#d6b66c',5,90);sfx('kill');
 }
@@ -586,7 +751,7 @@ function exchangeKarma(){
   if(paused||ended||runKarma<=0)return;
   const station=nearbyExchange();if(!station){event('카르마 교환소 또는 본기지에서 교환할 수 있습니다.',1.8);return;}
   const gain=Math.floor(runKarma*karmaRate());
-  credits+=gain;bankedKarma+=runKarma;runKarma=0;sfx('exchange');event(`${station.name} · 크레딧 +${gain}`,2.2);
+  credits+=gain;bankedKarma+=runKarma;runKarma=0;sfx('exchange');event(`${station.name} · 크레딧 +${gain}`,2.2);saveSnapshot('exchange');
   burst(player.x,player.y,'#80d9e8',14,90);
 }
 
@@ -607,7 +772,7 @@ const UPGRADE_DEFS={
 function upgradeCost(id){const d=UPGRADE_DEFS[id],lv=upgradeLevels[id];return Math.floor(d.baseCost*Math.pow(d.growth,lv)/10)*10;}
 function buyUpgrade(id){
   const cost=upgradeCost(id);if(credits<cost)return;
-  credits-=cost;upgradeLevels[id]++;sfx('upgrade');renderBattleMenu();
+  credits-=cost;upgradeLevels[id]++;sfx('upgrade');renderBattleMenu();saveSnapshot('upgrade');
 }
 
 function recruitCost(type){
@@ -617,7 +782,7 @@ function recruitCost(type){
 function recruit(type){
   if(squadCount()>=MAX_SQUAD)return;
   const cost=recruitCost(type);if(credits<cost)return;
-  credits-=cost;if(addAlly(type)){sfx('recruit');event(type==='rifle'?'소총병이 분대에 합류했습니다.':'화염 돌격병이 분대에 합류했습니다.',1.8);}renderBattleMenu();
+  credits-=cost;if(addAlly(type)){sfx('recruit');event(type==='rifle'?'소총병이 분대에 합류했습니다.':'화염 돌격병이 분대에 합류했습니다.',1.8);}renderBattleMenu();saveSnapshot('recruit');
 }
 
 function upgradeStatLine(id){
@@ -646,7 +811,7 @@ function renderBattleMenu(){
   $('#buyFlame')?.addEventListener('click',()=>recruit('flame'));
   $('#buyStim')?.addEventListener('click',()=>{
     if(meta.stimUnlocked||credits<stimCost)return;
-    credits-=stimCost;meta.stimUnlocked=true;saveMeta(meta);sfx('upgrade');event('스팀팩 영구 해금! R키로 사용할 수 있습니다.',2.4);renderBattleMenu();
+    credits-=stimCost;meta.stimUnlocked=true;saveMeta(meta);sfx('upgrade');event('스팀팩 영구 해금! R키로 사용할 수 있습니다.',2.4);renderBattleMenu();saveSnapshot('stim-unlock');
   });
 }
 
@@ -664,15 +829,88 @@ function keyLabel(code){
   return ({Space:'SPACE',ShiftLeft:'L-SHIFT',ShiftRight:'R-SHIFT',ControlLeft:'L-CTRL',ControlRight:'R-CTRL',AltLeft:'L-ALT',AltRight:'R-ALT'})[code]||code||'R';
 }
 function validStimKey(code){return /^((Key|Digit)[A-Z0-9]|Space|ShiftLeft|ShiftRight|ControlLeft|ControlRight|AltLeft|AltRight)$/.test(code||'') && !['KeyW','KeyA','KeyS','KeyD','KeyE','KeyU'].includes(code);}
-function openSettings(){if(ended)return;paused=true;$('#stimKeyBtn').textContent=keyLabel(meta.settings.stimKey);$('#settingsOverlay').classList.remove('hidden');}
-function closeSettings(){captureStimKey=false;$('#keyCaptureHint').classList.add('hidden');$('#settingsOverlay').classList.add('hidden');paused=false;last=performance.now();}
+function openSettings(fromPause=false){if(ended)return;settingsReturnToPause=fromPause;paused=true;if(fromPause)$('#pauseOverlay').classList.add('hidden');$('#stimKeyBtn').textContent=keyLabel(meta.settings.stimKey);$('#settingsOverlay').classList.remove('hidden');}
+function closeSettings(){
+  captureStimKey=false;$('#keyCaptureHint').classList.add('hidden');$('#settingsOverlay').classList.add('hidden');
+  if(settingsReturnToPause){settingsReturnToPause=false;openPauseMenu();return;}
+  paused=false;last=performance.now();
+}
+
+function unlockStoryRecord(id){
+  const rec=STORY_RECORDS[id];if(!rec)return;
+  meta.storyUnlocked ||= [];
+  if(meta.storyUnlocked.includes(id))return;
+  meta.storyUnlocked.push(id);saveMeta(meta);
+  storyResumeAfterClose=true;paused=true;
+  $('#storyEyebrow').textContent='FIELD RECORD RECOVERED';
+  $('#storyTitle').textContent=rec.title;$('#storyText').textContent=rec.text;
+  $('#storyOverlay').classList.remove('hidden');
+}
+function closeStoryRecord(){
+  $('#storyOverlay').classList.add('hidden');
+  if(storyResumeAfterClose&&!ended){paused=false;last=performance.now();}
+}
+
+function saveSnapshot(reason='auto'){
+  if(ended)return false;
+  const snapshot={
+    reason,gameTime,finalDestroyed,finalHold,threat,kills,runKarma,credits,bankedKarma,destroyedBases,assaultClock,
+    home:{hp:home.hp},
+    player:{x:player.x,y:player.y,hp:player.hp,aimAngle:player.aimAngle},
+    upgradeLevels:{...upgradeLevels},stimRemaining,stimCooldown,
+    allies:allies.map(a=>({type:a.type,x:a.x,y:a.y,hp:a.hp,maxHp:a.maxHp,slot:a.slot,aimAngle:a.aimAngle||0,fireClock:a.fireClock||0,burstShots:a.burstShots||0,burstClock:a.burstClock||0})),
+    enemies:enemies.slice(0,150).map(e=>({x:e.x,y:e.y,type:e.type,ownerBaseId:e.ownerBaseId,objective:e.objective,hp:e.hp,maxHp:e.maxHp,speed:e.speed,dmg:e.dmg,karma:e.karma,r:e.r,attack:e.attack||0,kx:e.kx||0,ky:e.ky||0,hit:e.hit||0,wander:e.wander||0})),
+    enemyBases:enemyBases.map(b=>({id:b.id,hp:b.hp,alive:b.alive,activated:b.activated,spawnClock:b.spawnClock,ruinSpawnClock:b.ruinSpawnClock})),
+    explored:Array.from(explored)
+  };
+  return saveRun(snapshot);
+}
+
+function restoreSnapshot(snap){
+  if(!snap)return false;
+  gameTime=Number(snap.gameTime)||0;finalDestroyed=!!snap.finalDestroyed;finalHold=Number(snap.finalHold)||0;
+  threat=clamp(Number(snap.threat)||12,0,100);kills=Number(snap.kills)||0;runKarma=Number(snap.runKarma)||0;credits=Number(snap.credits)||0;
+  bankedKarma=Number(snap.bankedKarma)||0;destroyedBases=Number(snap.destroyedBases)||0;assaultClock=Number(snap.assaultClock)||28;
+  if(snap.home)home.hp=clamp(Number(snap.home.hp)||home.maxHp,0,home.maxHp);
+  if(snap.player){player.x=Number(snap.player.x)||player.x;player.y=Number(snap.player.y)||player.y;player.hp=clamp(Number(snap.player.hp)||player.maxHp,1,player.maxHp);player.aimAngle=Number(snap.player.aimAngle)||0;}
+  if(snap.upgradeLevels){upgradeLevels.attack=Number(snap.upgradeLevels.attack)||0;upgradeLevels.defense=Number(snap.upgradeLevels.defense)||0;upgradeLevels.speed=Number(snap.upgradeLevels.speed)||0;}
+  stimRemaining=Number(snap.stimRemaining)||0;stimCooldown=Number(snap.stimCooldown)||0;
+  allies=(snap.allies||[]).slice(0,MAX_SQUAD-1).map((a,i)=>({kind:'ally',type:a.type==='flame'?'flame':'rifle',x:a.x,y:a.y,r:a.type==='flame'?15:13,hp:a.hp,maxHp:a.maxHp|| (a.type==='flame'?132:88),baseSpeed:a.type==='flame'?202:215,fireClock:a.fireClock||0,burstShots:a.burstShots||0,burstClock:a.burstClock||0,aimAngle:a.aimAngle||0,recoil:0,muzzle:0,invuln:0,slot:i}));
+  enemies=(snap.enemies||[]).slice(0,150).map(e=>({...e,kind:'enemy',attack:e.attack||0,hit:0,kx:e.kx||0,ky:e.ky||0}));
+  for(const saved of snap.enemyBases||[]){const b=enemyBases.find(x=>x.id===saved.id);if(b)Object.assign(b,{hp:saved.hp,alive:saved.alive,activated:saved.activated,spawnClock:saved.spawnClock,ruinSpawnClock:saved.ruinSpawnClock});}
+  destroyedBases=enemyBases.filter(b=>!b.alive).length;
+  if(Array.isArray(snap.explored))for(let i=0;i<Math.min(explored.length,snap.explored.length);i++)explored[i]=snap.explored[i]?1:0;
+  reindexAllies();cam.x=player.x;cam.y=player.y;updateExploration(true);return true;
+}
+
+function openPauseMenu(){
+  if(ended||introBlocking||!$('#storyOverlay').classList.contains('hidden'))return;
+  paused=true;
+  const remain=Math.max(0,GAME_LENGTH-gameTime),m=Math.floor(remain/60),sec=Math.floor(remain%60);
+  $('#pauseSnapshot').innerHTML=`<span>남은 시간 <b>${m}:${String(sec).padStart(2,'0')}</b></span><span>카르마 <b>${runKarma}</b></span><span>크레딧 <b>${credits}</b></span><span>분대 <b>${squadCount()}/${MAX_SQUAD}</b></span>`;
+  $('#pauseOverlay').classList.remove('hidden');saveSnapshot('pause');
+}
+function closePauseMenu(){if(ended)return;$('#pauseOverlay').classList.add('hidden');paused=false;last=performance.now();}
+function saveAndGoHome(){saveSnapshot('home');location.href='/';}
+function openAbandonConfirm(){paused=true;$('#pauseOverlay').classList.add('hidden');$('#abandonOverlay').classList.remove('hidden');}
+function closeAbandonConfirm(){ $('#abandonOverlay').classList.add('hidden');$('#pauseOverlay').classList.remove('hidden'); }
+function abandonRun(){clearRun();location.href='/';}
+
+function updateTerrainHint(dt){
+  const label=terrainInfoAt(player.x,player.y).label;
+  if(label!==lastTerrainLabel){lastTerrainLabel=label;if(label){$('#terrainHint').textContent=label;$('#terrainHint').classList.remove('hidden');terrainHintClock=1.8;}}
+  if(terrainHintClock>0){terrainHintClock-=dt;if(terrainHintClock<=0)$('#terrainHint').classList.add('hidden');}
+}
 
 function update(dt){
   if(paused||ended)return;
-  gameTime+=dt;
+  gameTime+=dt;autosaveClock+=dt;fogClock+=dt;
   if(!finalDestroyed && gameTime>=GAME_LENGTH){endRun(false,'10분 내 적 지휘기지를 파괴하지 못했습니다.');return;}
   if(finalDestroyed){finalHold-=dt;if(finalHold<=0){endRun(true,'적 지휘기지를 파괴하고 마지막 역습까지 버텼습니다.');return;}}
   updatePlayer(dt);updateAllies(dt);updateEnemies(dt);updateFriendlyBullets(dt);updateEnemyBullets(dt);updateEnemyBases(dt);updateThreat(dt);
+  if(fogClock>=.20){updateExploration();fogClock=0;}
+  updateTerrainHint(dt);
+  if(autosaveClock>=10){saveSnapshot('auto');autosaveClock=0;}
   homeUnderAttack=Math.max(0,homeUnderAttack-dt);homeAlarmClock=Math.max(0,homeAlarmClock-dt);
   for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;if(p.life<=0)particles.splice(i,1);}
   for(let i=floating.length-1;i>=0;i--){const f=floating[i];f.y-=24*dt;f.life-=dt;if(f.life<=0)floating.splice(i,1);}
@@ -684,18 +922,75 @@ function update(dt){
 
 function drawGround(){
   ctx.fillStyle='#29462f';ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle='#31523a';ctx.lineWidth=1;
-  for(let x=0;x<W;x+=48){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-  for(let y=0;y<H;y+=48){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-  ctx.fillStyle='#355b3d';
-  for(let x=80;x<W;x+=260)for(let y=90;y<H;y+=230){
-    if(Math.abs(x-home.x)<320&&Math.abs(y-home.y)<300)continue;
-    ctx.fillRect(x,y,18,10);ctx.fillRect(x+11,y-8,8,8);
+
+  // broad terrain patches
+  ctx.fillStyle='#31533a';
+  for(let x=90;x<W;x+=310)for(let y=85;y<H;y+=270){
+    if(Math.abs(x-home.x)<300&&Math.abs(y-home.y)<280)continue;
+    ctx.fillRect(x,y,24,10);ctx.fillRect(x+14,y-10,9,9);ctx.fillRect(x-15,y+14,12,6);
   }
+
   // roads
-  ctx.strokeStyle='#486048';ctx.lineWidth=38;ctx.globalAlpha=.32;
-  for(const b of enemyBases){ctx.beginPath();ctx.moveTo(home.x,home.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
-  ctx.globalAlpha=1;
+  ctx.save();ctx.lineCap='round';
+  for(const r of roads){
+    ctx.strokeStyle='#4a5142';ctx.lineWidth=r.w+12;ctx.globalAlpha=.58;ctx.beginPath();ctx.moveTo(r.x1,r.y1);ctx.lineTo(r.x2,r.y2);ctx.stroke();
+    ctx.strokeStyle='#66705a';ctx.lineWidth=r.w;ctx.globalAlpha=.68;ctx.beginPath();ctx.moveTo(r.x1,r.y1);ctx.lineTo(r.x2,r.y2);ctx.stroke();
+    ctx.strokeStyle='#829078';ctx.lineWidth=3;ctx.setLineDash([18,18]);ctx.globalAlpha=.45;ctx.beginPath();ctx.moveTo(r.x1,r.y1);ctx.lineTo(r.x2,r.y2);ctx.stroke();ctx.setLineDash([]);
+  }
+  ctx.restore();ctx.globalAlpha=1;
+
+  // swamps
+  for(const z of swamps){
+    ctx.save();ctx.translate(z.x,z.y);ctx.fillStyle='#254c49';ctx.globalAlpha=.9;ctx.beginPath();ctx.arc(0,0,z.r,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#3f7770';ctx.lineWidth=8;ctx.globalAlpha=.45;for(let rr=z.r*.35;rr<z.r;rr+=52){ctx.beginPath();ctx.arc(0,0,rr,.4,2.4);ctx.stroke();ctx.beginPath();ctx.arc(0,0,rr,3.5,5.4);ctx.stroke();}
+    ctx.restore();ctx.globalAlpha=1;
+  }
+
+  // raised plateaus
+  for(const p of plateaus){
+    ctx.fillStyle='#3a5a3d';ctx.fillRect(p.x,p.y,p.w,p.h);
+    ctx.fillStyle='#466947';ctx.fillRect(p.x+18,p.y+18,p.w-36,p.h-36);
+    ctx.strokeStyle='#708065';ctx.lineWidth=3;ctx.setLineDash([14,9]);ctx.strokeRect(p.x+24,p.y+24,p.w-48,p.h-48);ctx.setLineDash([]);
+  }
+
+  // forests - decorative clusters, but they reduce vision while standing inside.
+  for(const z of forests){
+    ctx.save();ctx.translate(z.x,z.y);ctx.globalAlpha=.92;
+    for(let i=0;i<18;i++){
+      const a=(i*2.17)%6.28,rr=(i%6)/6*z.r*.78+36;const x=Math.cos(a)*rr,y=Math.sin(a)*rr;
+      ctx.fillStyle='#193c28';ctx.fillRect(x-8,y-8,16,16);ctx.fillStyle='#2d6340';ctx.fillRect(x-15,y-20,30,18);ctx.fillStyle='#39784b';ctx.fillRect(x-8,y-30,16,15);
+    }
+    ctx.restore();ctx.globalAlpha=1;
+  }
+
+  for(const o of obstacles) drawObstacle(o);
+}
+
+function drawObstacle(o){
+  ctx.save();
+  if(o.type==='circle'){
+    ctx.translate(o.x,o.y);ctx.fillStyle='#1f2c27';ctx.beginPath();ctx.ellipse(8,11,o.r*1.05,o.r*.82,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#68756a';ctx.beginPath();ctx.arc(0,0,o.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#899487';ctx.beginPath();ctx.arc(-o.r*.25,-o.r*.28,o.r*.38,0,Math.PI*2);ctx.fill();
+  }else if(o.kind==='cliff'){
+    ctx.fillStyle='#243328';ctx.fillRect(o.x+7,o.y+9,o.w,o.h);ctx.fillStyle='#6c735d';ctx.fillRect(o.x,o.y,o.w,o.h);ctx.fillStyle='#91977b';
+    if(o.w>o.h){for(let x=o.x+8;x<o.x+o.w;x+=28)ctx.fillRect(x,o.y+4,16,5);}else{for(let y=o.y+8;y<o.y+o.h;y+=28)ctx.fillRect(o.x+4,y,5,16);}
+  }else{
+    ctx.fillStyle='#202923';ctx.fillRect(o.x+8,o.y+10,o.w,o.h);ctx.fillStyle='#5e655b';ctx.fillRect(o.x,o.y,o.w,o.h);ctx.fillStyle='#343a34';
+    for(let x=o.x+12;x<o.x+o.w-10;x+=35)ctx.fillRect(x,o.y+12,19,18);
+  }
+  ctx.restore();
+}
+
+function drawFogOverlay(){
+  const halfW=520,halfH=310;
+  const minCx=clamp(Math.floor((cam.x-halfW)/FOG_CELL)-1,0,FOG_COLS-1),maxCx=clamp(Math.floor((cam.x+halfW)/FOG_CELL)+1,0,FOG_COLS-1);
+  const minCy=clamp(Math.floor((cam.y-halfH)/FOG_CELL)-1,0,FOG_ROWS-1),maxCy=clamp(Math.floor((cam.y+halfH)/FOG_CELL)+1,0,FOG_ROWS-1);
+  for(let cy=minCy;cy<=maxCy;cy++)for(let cx=minCx;cx<=maxCx;cx++){
+    const x=cx*FOG_CELL,y=cy*FOG_CELL,centerX=x+FOG_CELL/2,centerY=y+FOG_CELL/2;
+    if(currentlyVisible(centerX,centerY))continue;
+    const seen=explored[fogIndex(cx,cy)]===1;
+    ctx.fillStyle=seen?'rgba(4,10,7,.58)':'rgba(2,5,4,.96)';ctx.fillRect(x-1,y-1,FOG_CELL+2,FOG_CELL+2);
+  }
 }
 
 function drawHome(){
@@ -762,38 +1057,49 @@ function drawWorld(){
   const ox=480-cam.x,oy=270-cam.y;ctx.save();ctx.translate(ox,oy);
   drawGround();drawExchangeStations();drawHome();
   for(const b of enemyBases)drawEnemyBase(b);
-  for(const c of corpses){ctx.save();ctx.globalAlpha=Math.max(0,c.life/c.maxLife);ctx.translate(c.x,c.y);ctx.rotate(c.rot||0);ctx.fillStyle='#6b5d55';ctx.fillRect(-c.r,-c.r*.55,c.r*2,c.r*1.1);ctx.restore();}ctx.globalAlpha=1;
+  for(const c of corpses){if(!currentlyVisible(c.x,c.y))continue;ctx.save();ctx.globalAlpha=Math.max(0,c.life/c.maxLife);ctx.translate(c.x,c.y);ctx.rotate(c.rot||0);ctx.fillStyle='#6b5d55';ctx.fillRect(-c.r,-c.r*.55,c.r*2,c.r*1.1);ctx.restore();}ctx.globalAlpha=1;
   for(const e of enemies){
+    if(!currentlyVisible(e.x,e.y))continue;
     ctx.save();ctx.translate(e.x,e.y);ctx.fillStyle=e.hit>0?'#f2e7d0':ENEMY_TYPES[e.type].color;ctx.fillRect(-e.r,-e.r,e.r*2,e.r*2);ctx.fillStyle='#172019';ctx.fillRect(-e.r+4,-4,5,5);ctx.fillRect(e.r-9,-4,5,5);ctx.restore();
     if(e.type==='brute'||e.type==='gunner'){ctx.fillStyle='#111';ctx.fillRect(e.x-e.r,e.y-e.r-9,e.r*2,4);ctx.fillStyle='#ff887c';ctx.fillRect(e.x-e.r,e.y-e.r-9,e.r*2*(e.hp/e.maxHp),4);}
   }
-  for(const tr of tracers){ctx.save();ctx.globalAlpha=Math.max(0,tr.life/tr.maxLife);ctx.strokeStyle='#ffe79a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(tr.x1,tr.y1);ctx.lineTo(tr.x2,tr.y2);ctx.stroke();ctx.restore();}
-  ctx.fillStyle='#ff786f';for(const b of enemyBullets)ctx.fillRect(b.x-3,b.y-3,6,6);
+  for(const tr of tracers){if(!currentlyVisible(tr.x1,tr.y1)&&!currentlyVisible(tr.x2,tr.y2))continue;ctx.save();ctx.globalAlpha=Math.max(0,tr.life/tr.maxLife);ctx.strokeStyle='#ffe79a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(tr.x1,tr.y1);ctx.lineTo(tr.x2,tr.y2);ctx.stroke();ctx.restore();}
+  ctx.fillStyle='#ff786f';for(const b of enemyBullets)if(currentlyVisible(b.x,b.y))ctx.fillRect(b.x-3,b.y-3,6,6);
   for(const a of allies)drawUnit(a,false);drawUnit(player,true);
-  for(const p of particles){ctx.globalAlpha=Math.max(0,Math.min(1,p.life*2.2));ctx.fillStyle=p.color||'#f0c36d';ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);}ctx.globalAlpha=1;
-  ctx.font='bold 12px monospace';ctx.textAlign='center';for(const f of floating){ctx.globalAlpha=Math.min(1,f.life*2);ctx.fillStyle=f.color||'#fff';ctx.fillText(f.text,f.x,f.y);}ctx.globalAlpha=1;
+  for(const p of particles){if(!currentlyVisible(p.x,p.y))continue;ctx.globalAlpha=Math.max(0,Math.min(1,p.life*2.2));ctx.fillStyle=p.color||'#f0c36d';ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);}ctx.globalAlpha=1;
+  ctx.font='bold 12px monospace';ctx.textAlign='center';for(const f of floating){if(!currentlyVisible(f.x,f.y))continue;ctx.globalAlpha=Math.min(1,f.life*2);ctx.fillStyle=f.color||'#fff';ctx.fillText(f.text,f.x,f.y);}ctx.globalAlpha=1;
+  drawFogOverlay();
   ctx.restore();
 }
 
 function drawMinimap(){
-  const w=minimap.width,h=minimap.height;mctx.clearRect(0,0,w,h);mctx.fillStyle='#08120ddd';mctx.fillRect(0,0,w,h);
+  const w=minimap.width,h=minimap.height;mctx.clearRect(0,0,w,h);mctx.fillStyle='#030705';mctx.fillRect(0,0,w,h);
   const mx=x=>x/W*w,my=y=>y/H*h;
+  // explored terrain only
+  for(let cy=0;cy<FOG_ROWS;cy++)for(let cx=0;cx<FOG_COLS;cx++){
+    if(!explored[fogIndex(cx,cy)])continue;
+    const x=cx*FOG_CELL,y=cy*FOG_CELL;
+    mctx.fillStyle='#1d3325';mctx.fillRect(mx(x),my(y),Math.ceil(FOG_CELL/W*w)+1,Math.ceil(FOG_CELL/H*h)+1);
+  }
   mctx.strokeStyle='#425a4c';mctx.lineWidth=2;mctx.strokeRect(1,1,w-2,h-2);
-  for(const b of enemyBases){mctx.fillStyle=b.alive?(BASE_TYPES[b.type].final?'#ff4f57':'#d66a62'):'#524943';const s=BASE_TYPES[b.type].final?8:6;mctx.fillRect(mx(b.x)-s/2,my(b.y)-s/2,s,s);}
-  mctx.fillStyle='#75d8e6';for(const s of exchangeStations){mctx.fillRect(mx(s.x)-2,my(s.y)-2,4,4);}
+  for(const b of enemyBases){
+    if(!exploredAt(b.x,b.y))continue;
+    mctx.fillStyle=b.alive?(BASE_TYPES[b.type].final?'#ff4f57':'#d66a62'):'#665953';const size=BASE_TYPES[b.type].final?8:6;mctx.fillRect(mx(b.x)-size/2,my(b.y)-size/2,size,size);
+  }
+  mctx.fillStyle='#75d8e6';for(const st of exchangeStations)if(exploredAt(st.x,st.y))mctx.fillRect(mx(st.x)-2,my(st.y)-2,4,4);
   mctx.fillStyle=homeUnderAttack>0&&Math.floor(performance.now()/180)%2?'#ff625f':'#ffd36d';mctx.fillRect(mx(home.x)-4,my(home.y)-4,8,8);
   mctx.fillStyle='#9edcf1';for(const a of allies)mctx.fillRect(mx(a.x)-1,my(a.y)-1,3,3);
   mctx.fillStyle='#fff';mctx.beginPath();mctx.arc(mx(player.x),my(player.y),3.5,0,Math.PI*2);mctx.fill();
-  mctx.fillStyle='#e27469';for(const e of enemies){if(dist(player,e)<700||e.objective==='home')mctx.fillRect(mx(e.x),my(e.y),2,2);}
+  mctx.fillStyle='#e27469';for(const e of enemies)if(currentlyVisible(e.x,e.y))mctx.fillRect(mx(e.x),my(e.y),2,2);
 }
 
 function updateHud(){
   $('#hpBar').style.width=`${clamp(player.hp/player.maxHp*100,0,100)}%`;$('#hpText').textContent=`${Math.ceil(player.hp)}/${Math.ceil(player.maxHp)}`;
   $('#baseBar').style.width=`${clamp(home.hp/home.maxHp*100,0,100)}%`;$('#baseText').textContent=`${Math.ceil(home.hp)}/${Math.ceil(home.maxHp)}`;
   $('#threatBar').style.width=`${threat}%`;$('#threatText').textContent=`${Math.round(threat)}%`;
-  $('#karmaText').textContent=runKarma;$('#creditText').textContent=credits;$('#squadText').textContent=`${squadCount()}/${MAX_SQUAD}`;$('#baseCountText').textContent=`${destroyedBases}/${enemyBases.length}`;
+  $('#karmaText').textContent=runKarma;$('#creditText').textContent=credits;$('#squadText').textContent=`${squadCount()}/${MAX_SQUAD}`;
   const remain=Math.max(0,GAME_LENGTH-gameTime),m=Math.floor(remain/60),s=Math.floor(remain%60);$('#timerText').textContent=finalDestroyed?`HOLD ${Math.ceil(finalHold)}`:`${m}:${String(s).padStart(2,'0')}`;
-  const cmd=enemyBases.find(b=>b.type==='command');$('#missionText').textContent=finalDestroyed?'역습을 버텨라':`지휘기지 HP ${Math.ceil(cmd.hp/cmd.maxHp*100)}% · 거점 ${destroyedBases}/${enemyBases.length}`;
+  const cmd=enemyBases.find(b=>b.type==='command');const cmdSeen=exploredAt(cmd.x,cmd.y);$('#missionText').textContent=finalDestroyed?'역습을 버텨라':(cmdSeen?`북부 지휘기지 HP ${Math.ceil(cmd.hp/cmd.maxHp*100)}% · 파괴 ${destroyedBases}/${enemyBases.length}`:`북쪽 지휘 신호를 추적하라 · 파괴 ${destroyedBases}/${enemyBases.length}`);
   $('#stimCd').textContent=!meta.stimUnlocked?`${keyLabel(meta.settings.stimKey)} · LOCK`:(stimRemaining>0?`ACTIVE ${stimRemaining.toFixed(1)}`:(stimCooldown<=0?`${keyLabel(meta.settings.stimKey)} · READY`:`${stimCooldown.toFixed(1)}s`));
   $('#stimBtn').classList.toggle('cooldown',(!meta.stimUnlocked)||(stimCooldown>0&&stimRemaining<=0));$('#stimBtn').classList.toggle('active',stimRemaining>0);
   const level=threat<30?'LOW':threat<60?'MID':threat<85?'HIGH':'MAX';$('#threatLabel').textContent=level;$('#threatLabel').dataset.level=level;
@@ -807,7 +1113,7 @@ function endRun(win,reason){
   if(ended)return;ended=true;paused=true;sfx(win?'win':'lose');
   const earnedXp=Math.floor(kills*.62 + destroyedBases*46 + gameTime*.12 + (win?170:0));
   meta.accountXp+=earnedXp;meta.runs++;if(win)meta.wins=(meta.wins||0)+1;meta.totalKarmaBanked=(meta.totalKarmaBanked||0)+bankedKarma;meta.bestTime=Math.max(meta.bestTime,Math.floor(gameTime));
-  const lv=accountLevelFromXp(meta.accountXp).level;if(lv>=10&&(meta.wins||0)>=1)meta.chapter1Complete=true;saveMeta(meta);
+  const lv=accountLevelFromXp(meta.accountXp).level;if(lv>=10&&(meta.wins||0)>=1)meta.chapter1Complete=true;saveMeta(meta);clearRun();
   $('#endTitle').textContent=win?'작전 성공':'작전 실패';$('#endReason').textContent=reason;
   $('#endRewards').innerHTML=`
     <div class="reward"><span>계정 XP</span><b>+${earnedXp}</b></div>
@@ -832,10 +1138,17 @@ document.querySelectorAll('.menu-tab').forEach(b=>b.addEventListener('click',()=
 $('#exchangeBtn').addEventListener('click',exchangeKarma);
 $('#stimBtn').addEventListener('click',useStim);
 
-// Settings
-$('#settingsBtn').addEventListener('click',openSettings);
+// Pause / settings / persistent operation controls
+$('#pauseBtn').addEventListener('click',openPauseMenu);
+$('#resumeBtn').addEventListener('click',closePauseMenu);
+$('#pauseSettingsBtn').addEventListener('click',()=>openSettings(true));
+$('#saveHomeBtn').addEventListener('click',saveAndGoHome);
+$('#abandonBtn').addEventListener('click',openAbandonConfirm);
+$('#cancelAbandonBtn').addEventListener('click',closeAbandonConfirm);
+$('#confirmAbandonBtn').addEventListener('click',abandonRun);
 $('#closeSettingsBtn').addEventListener('click',closeSettings);
-$('#stimKeyBtn').addEventListener('click',()=>{captureStimKey=true;$('#keyCaptureHint').classList.remove('hidden');$('#stimKeyBtn').textContent='...';});
+$('#closeStoryEventBtn').addEventListener('click',closeStoryRecord);
+$('#stimKeyBtn').addEventListener('click',()=>{captureStimKey=true;$('#keyCaptureHint').classList.remove('hidden');$('#keyCaptureHint').textContent='원하는 키를 누르세요. ESC는 취소입니다.';$('#stimKeyBtn').textContent='...';});
 $('#resetStimKeyBtn').addEventListener('click',()=>{meta.settings.stimKey='KeyR';saveMeta(meta);$('#stimKeyBtn').textContent='R';event('스팀팩 단축키를 R로 초기화했습니다.',1.5);});
 $('#soundBtn').addEventListener('click',()=>{soundOn=!soundOn;meta.settings.sound=soundOn;saveMeta(meta);$('#soundBtn').textContent=soundOn?'🔊':'🔇';if(soundOn){ensureAudio();sfx('upgrade');}});
 $('#soundBtn').textContent=soundOn?'🔊':'🔇';
@@ -846,25 +1159,34 @@ window.addEventListener('keydown',e=>{
     e.preventDefault();
     if(e.code==='Escape'){captureStimKey=false;$('#keyCaptureHint').classList.add('hidden');$('#stimKeyBtn').textContent=keyLabel(meta.settings.stimKey);return;}
     if(!validStimKey(e.code)){ $('#keyCaptureHint').textContent='이동·교환·메뉴 키와 겹칩니다. 다른 키를 눌러주세요.'; return; }
-    meta.settings.stimKey=e.code;saveMeta(meta);captureStimKey=false;$('#stimKeyBtn').textContent=keyLabel(e.code);$('#keyCaptureHint').classList.add('hidden');return;
+    meta.settings.stimKey=e.code;saveMeta(meta);captureStimKey=false;$('#stimKeyBtn').textContent=keyLabel(e.code);$('#keyCaptureHint').classList.add('hidden');saveSnapshot('settings');return;
   }
   keys[e.code]=true;
   if(e.code===meta.settings.stimKey){e.preventDefault();useStim();}
   if(e.code==='KeyE'){e.preventDefault();exchangeKarma();}
-  if(e.code==='KeyU'){e.preventDefault();$('#battleMenu').classList.contains('hidden')?openBattleMenu('upgrade'):closeBattleMenu();}
+  if(e.code==='KeyU'){e.preventDefault();if(paused && $('#battleMenu').classList.contains('hidden'))return;$('#battleMenu').classList.contains('hidden')?openBattleMenu('upgrade'):closeBattleMenu();}
   if(e.code==='Escape'){
-    if(!$('#settingsOverlay').classList.contains('hidden'))closeSettings();
-    else if(!$('#battleMenu').classList.contains('hidden'))closeBattleMenu();
+    e.preventDefault();
+    if(!$('#introOverlay').classList.contains('hidden')) return;
+    if(!$('#storyOverlay').classList.contains('hidden')) closeStoryRecord();
+    else if(!$('#abandonOverlay').classList.contains('hidden')) closeAbandonConfirm();
+    else if(!$('#settingsOverlay').classList.contains('hidden')) closeSettings();
+    else if(!$('#battleMenu').classList.contains('hidden')) closeBattleMenu();
+    else if(!$('#pauseOverlay').classList.contains('hidden')) closePauseMenu();
+    else openPauseMenu();
   }
 });
 window.addEventListener('keyup',e=>keys[e.code]=false);
 window.addEventListener('pointerdown',ensureAudio,{passive:true});
-canvas.addEventListener('dblclick',()=>openBattleMenu('upgrade'));
+canvas.addEventListener('dblclick',()=>{if(!paused)openBattleMenu('upgrade');});
 canvas.addEventListener('pointerup',e=>{
-  if(e.pointerType!=='touch')return;
+  if(e.pointerType!=='touch'||paused)return;
   const now=performance.now();if(now-lastTouchTap<330)openBattleMenu('upgrade');lastTouchTap=now;
 });
 
+// Browser back/close must not delete the current operation.
+window.addEventListener('pagehide',()=>{ if(!ended) saveSnapshot('pagehide'); });
+window.addEventListener('beforeunload',()=>{ if(!ended) saveSnapshot('beforeunload'); });
 // Mobile joystick
 const joy={x:0,y:0},joyBase=$('#joyBase'),knob=$('#joyKnob');let joyId=null;
 function joystickReset(){joy.x=joy.y=0;knob.style.transform='translate(0,0)';}
@@ -885,5 +1207,27 @@ if(DEBUG){
   $('#debugStimBtn').onclick=()=>{meta.stimUnlocked=true;saveMeta(meta);event('DEBUG · STIM 해금',1.2);};
 }
 
-// Kick-start nearby enemies only when the player chooses a direction. No random map-wide waves.
-event(`WASD 이동 · 3점사 자동사격 · E 카르마 교환 · U 강화/상점 · ${keyLabel(meta.settings.stimKey)} 스팀팩`,5);
+// V4 boot: resume an unfinished operation when requested (or when visiting game.html directly),
+// otherwise introduce the story once. New sorties explicitly clear old snapshots via ?new=1.
+const storedRun = !NEW_REQUESTED ? loadRun() : null;
+let restoredRun = false;
+if(storedRun && (RESUME_REQUESTED || !NEW_REQUESTED)){
+  restoredRun = restoreSnapshot(storedRun);
+  if(restoredRun) event(`작전 복구 완료 · 카르마 ${runKarma} · 분대 ${squadCount()}/${MAX_SQUAD}`,3);
+}
+updateExploration(true);
+
+if(!restoredRun && !meta.introSeen){
+  paused=true;introBlocking=true;$('#introOverlay').classList.remove('hidden');
+  $('#startIntroBtn').addEventListener('click',()=>{
+    ensureAudio();meta.introSeen=true;saveMeta(meta);introBlocking=false;$('#introOverlay').classList.add('hidden');paused=false;last=performance.now();
+    event('북쪽에서 미확인 지휘 신호 감지 · 먼저 주변을 탐색하세요.',4);saveSnapshot('intro-complete');
+  },{once:true});
+}else{
+  event(`WASD 이동 · 3점사 자동사격 · E 카르마 교환 · U 강화/상점 · ${keyLabel(meta.settings.stimKey)} 스팀팩 · ESC 메뉴`,5);
+  saveSnapshot(restoredRun?'resume':'start');
+}
+
+if(DEBUG){
+  $('#debugRevealBtn').onclick=()=>{explored.fill(1);event('DEBUG · 전체 지도 공개',1.2);};
+}
