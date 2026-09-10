@@ -1,4 +1,4 @@
-import { loadMeta, accountLevelFromXp, getRunPerks, chapterProgress, loadRun, clearRun } from './storage.js?v=4.0.3';
+import { loadMeta, accountLevelFromXp, getRunPerks, chapterProgress, loadRun, clearRun } from './storage.js?v=4.0.4';
 
 const $ = s => document.querySelector(s);
 const meta = loadMeta();

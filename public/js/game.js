@@ -1,4 +1,4 @@
-import { loadMeta, saveMeta, getRunPerks, accountLevelFromXp, loadRun, saveRun, clearRun } from './storage.js?v=4.0.3';
+import { loadMeta, saveMeta, getRunPerks, accountLevelFromXp, loadRun, saveRun, clearRun } from './storage.js?v=4.0.4';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#gameCanvas');
@@ -141,8 +141,45 @@ const obstacles = [
 const FOG_CELL = 72;
 const FOG_COLS = Math.ceil(W / FOG_CELL);
 const FOG_ROWS = Math.ceil(H / FOG_CELL);
+// Coarse exploration grid is kept only for fast gameplay checks / legacy saves.
 const explored = new Uint8Array(FOG_COLS * FOG_ROWS);
 const visibleFog = new Uint8Array(FOG_COLS * FOG_ROWS);
+
+// V4.0.4: exploration is rendered from a persistent, soft-edged world mask.
+// This removes the artificial square/gray tiles and leaves a natural circular trail.
+const EXPLORE_SCALE = .25;
+const exploreMask = document.createElement('canvas');
+exploreMask.width = Math.ceil(W * EXPLORE_SCALE);
+exploreMask.height = Math.ceil(H * EXPLORE_SCALE);
+const exctx = exploreMask.getContext('2d');
+exctx.imageSmoothingEnabled = true;
+let explorationTrail = [];
+let lastExploreStamp = null;
+
+function stampExploredCircle(x,y,rad,record=true){
+  const sx=x*EXPLORE_SCALE, sy=y*EXPLORE_SCALE, sr=rad*EXPLORE_SCALE;
+  const g=exctx.createRadialGradient(sx,sy,Math.max(0,sr*.74),sx,sy,sr);
+  g.addColorStop(0,'rgba(255,255,255,1)');
+  g.addColorStop(.72,'rgba(255,255,255,1)');
+  g.addColorStop(.90,'rgba(255,255,255,.72)');
+  g.addColorStop(1,'rgba(255,255,255,0)');
+  exctx.save();
+  exctx.globalCompositeOperation='source-over';
+  exctx.fillStyle=g;
+  exctx.beginPath();exctx.arc(sx,sy,sr,0,Math.PI*2);exctx.fill();
+  exctx.restore();
+  if(record){
+    const p=[Math.round(x),Math.round(y),Math.round(rad)];
+    const far=!lastExploreStamp||Math.hypot(x-lastExploreStamp[0],y-lastExploreStamp[1])>=42||Math.abs(rad-lastExploreStamp[2])>=24;
+    if(far){explorationTrail.push(p);lastExploreStamp=p;if(explorationTrail.length>1400)explorationTrail.splice(0,explorationTrail.length-1400);}
+  }
+}
+
+function rebuildExplorationMask(){
+  exctx.clearRect(0,0,exploreMask.width,exploreMask.height);
+  lastExploreStamp=null;
+  for(const p of explorationTrail)stampExploredCircle(p[0],p[1],p[2],false);
+}
 
 const STORY_RECORDS = {
   'west-outpost': {title:'기록 01 · 감시망', text:'적 전투체들은 무작위로 움직이지 않는다. 모든 경계 신호가 북쪽 지휘망으로 향하고 있다.'},
@@ -256,12 +293,11 @@ function currentlyVisible(x,y){
 }
 function fogIndex(cx,cy){ return cy*FOG_COLS+cx; }
 function exploredAt(x,y){
+  // Gameplay discovery uses the coarse grid, while visuals use the smooth mask.
   const cx=clamp(Math.floor(x/FOG_CELL),0,FOG_COLS-1),cy=clamp(Math.floor(y/FOG_CELL),0,FOG_ROWS-1);
   return explored[fogIndex(cx,cy)]===1;
 }
 function updateExploration(force=false){
-  // Mark every fog cell that intersects a sight circle as explored. Using cell-centre
-  // checks created blocky gaps at the edge of the player's sight in V4.0.2.
   visibleFog.fill(0);
   const sources=[home,...aliveSquad()];
   for(const src of sources){
@@ -273,11 +309,17 @@ function updateExploration(force=false){
       const closestX=clamp(src.x,left,left+FOG_CELL);
       const closestY=clamp(src.y,top,top+FOG_CELL);
       if(Math.hypot(closestX-src.x,closestY-src.y)<=rad){
-        const idx=fogIndex(cx,cy);
-        visibleFog[idx]=1;
-        explored[idx]=1;
+        const idx=fogIndex(cx,cy);visibleFog[idx]=1;explored[idx]=1;
       }
     }
+  }
+  // The home area is a permanent remembered circle. Stamp it first on a new run.
+  if(force&&explorationTrail.length===0)stampExploredCircle(home.x,home.y,270,true);
+  // Only the leader path is persisted visually. Squad members are close to the leader,
+  // while their live sight still contributes to the fully-visible area below.
+  const pr=visionRadiusFor(player);
+  if(force||!lastExploreStamp||Math.hypot(player.x-lastExploreStamp[0],player.y-lastExploreStamp[1])>=42){
+    stampExploredCircle(player.x,player.y,pr,true);
   }
 }
 function aliveSquad(){ return [player, ...allies.filter(a=>a.hp>0)]; }
@@ -877,7 +919,8 @@ function saveSnapshot(reason='auto'){
     allies:allies.map(a=>({type:a.type,x:a.x,y:a.y,hp:a.hp,maxHp:a.maxHp,slot:a.slot,aimAngle:a.aimAngle||0,fireClock:a.fireClock||0,burstShots:a.burstShots||0,burstClock:a.burstClock||0})),
     enemies:enemies.slice(0,150).map(e=>({x:e.x,y:e.y,type:e.type,ownerBaseId:e.ownerBaseId,objective:e.objective,hp:e.hp,maxHp:e.maxHp,speed:e.speed,dmg:e.dmg,karma:e.karma,r:e.r,attack:e.attack||0,kx:e.kx||0,ky:e.ky||0,hit:e.hit||0,wander:e.wander||0})),
     enemyBases:enemyBases.map(b=>({id:b.id,hp:b.hp,alive:b.alive,activated:b.activated,spawnClock:b.spawnClock,ruinSpawnClock:b.ruinSpawnClock})),
-    explored:Array.from(explored)
+    explored:Array.from(explored),
+    explorationTrail:explorationTrail.slice(-1400)
   };
   return saveRun(snapshot);
 }
@@ -896,6 +939,15 @@ function restoreSnapshot(snap){
   for(const saved of snap.enemyBases||[]){const b=enemyBases.find(x=>x.id===saved.id);if(b)Object.assign(b,{hp:saved.hp,alive:saved.alive,activated:saved.activated,spawnClock:saved.spawnClock,ruinSpawnClock:saved.ruinSpawnClock});}
   destroyedBases=enemyBases.filter(b=>!b.alive).length;
   if(Array.isArray(snap.explored))for(let i=0;i<Math.min(explored.length,snap.explored.length);i++)explored[i]=snap.explored[i]?1:0;
+  explorationTrail=Array.isArray(snap.explorationTrail)?snap.explorationTrail.slice(-1400):[];
+  // Legacy V4.0.3 saves had only square cells. Convert them once into overlapping
+  // soft circles so an existing operation does not have to be abandoned.
+  if(!explorationTrail.length&&Array.isArray(snap.explored)){
+    for(let cy=0;cy<FOG_ROWS;cy++)for(let cx=0;cx<FOG_COLS;cx++)if(explored[fogIndex(cx,cy)]){
+      explorationTrail.push([Math.round((cx+.5)*FOG_CELL),Math.round((cy+.5)*FOG_CELL),Math.round(FOG_CELL*.9)]);
+    }
+  }
+  rebuildExplorationMask();
   reindexAllies();cam.x=player.x;cam.y=player.y;updateExploration(true);return true;
 }
 
@@ -998,7 +1050,10 @@ function drawObstacle(o){
 }
 
 function drawFogOverlay(){
-  // Build a screen-space fog layer. First everything is black.
+  // Natural three-state fog:
+  // 1) unseen = opaque black
+  // 2) explored but not currently seen = original terrain under a dark translucent veil
+  // 3) current sight = fully clear with a feathered circular edge
   fctx.setTransform(1,0,0,1,0,0);
   fctx.clearRect(0,0,960,540);
   fctx.globalCompositeOperation='source-over';
@@ -1006,50 +1061,30 @@ function drawFogOverlay(){
   fctx.fillStyle='#000';
   fctx.fillRect(0,0,960,540);
 
-  // Areas visited before are not black: show the remembered terrain through a gray veil.
-  // Slight overlap between cells removes hairline seams.
-  const halfW=520, halfH=310;
-  const minCx=clamp(Math.floor((cam.x-halfW)/FOG_CELL)-2,0,FOG_COLS-1),maxCx=clamp(Math.floor((cam.x+halfW)/FOG_CELL)+2,0,FOG_COLS-1);
-  const minCy=clamp(Math.floor((cam.y-halfH)/FOG_CELL)-2,0,FOG_ROWS-1),maxCy=clamp(Math.floor((cam.y+halfH)/FOG_CELL)+2,0,FOG_ROWS-1);
-
+  // Persistent explored mask. Subtract only part of the black alpha so remembered
+  // terrain remains naturally dark instead of becoming a flat gray painted area.
   fctx.globalCompositeOperation='destination-out';
-  fctx.fillStyle='#fff';
-  for(let cy=minCy;cy<=maxCy;cy++)for(let cx=minCx;cx<=maxCx;cx++){
-    if(!explored[fogIndex(cx,cy)])continue;
-    const sx=cx*FOG_CELL-cam.x+480;
-    const sy=cy*FOG_CELL-cam.y+270;
-    fctx.fillRect(sx-1,sy-1,FOG_CELL+2,FOG_CELL+2);
-  }
+  fctx.globalAlpha=.42;
+  fctx.imageSmoothingEnabled=true;
+  fctx.drawImage(exploreMask,-cam.x+480,-cam.y+270,W,H);
 
-  fctx.globalCompositeOperation='source-over';
-  fctx.fillStyle='rgba(72,76,74,.68)';
-  for(let cy=minCy;cy<=maxCy;cy++)for(let cx=minCx;cx<=maxCx;cx++){
-    if(!explored[fogIndex(cx,cy)])continue;
-    const sx=cx*FOG_CELL-cam.x+480;
-    const sy=cy*FOG_CELL-cam.y+270;
-    fctx.fillRect(sx-1,sy-1,FOG_CELL+2,FOG_CELL+2);
-  }
-
-  // Current sight must always be fully clear. We punch circular sight holes out of
-  // BOTH the black unseen layer and the gray remembered layer.
-  fctx.globalCompositeOperation='destination-out';
+  // Live vision punches fully through the remaining fog. Edges are feathered so
+  // moving through the map leaves overlapping round, organic-looking exploration.
+  fctx.globalAlpha=1;
   const sources=[home,...aliveSquad()];
   for(const src of sources){
     const rad=src===home?270:visionRadiusFor(src);
     const sx=src.x-cam.x+480, sy=src.y-cam.y+270;
-    const g=fctx.createRadialGradient(sx,sy,Math.max(0,rad-28),sx,sy,rad);
+    const g=fctx.createRadialGradient(sx,sy,Math.max(0,rad*.80),sx,sy,rad);
     g.addColorStop(0,'rgba(0,0,0,1)');
-    g.addColorStop(.72,'rgba(0,0,0,1)');
+    g.addColorStop(.78,'rgba(0,0,0,1)');
+    g.addColorStop(.93,'rgba(0,0,0,.72)');
     g.addColorStop(1,'rgba(0,0,0,0)');
     fctx.fillStyle=g;
-    fctx.beginPath();
-    fctx.arc(sx,sy,rad,0,Math.PI*2);
-    fctx.fill();
+    fctx.beginPath();fctx.arc(sx,sy,rad,0,Math.PI*2);fctx.fill();
   }
   fctx.globalCompositeOperation='source-over';
   fctx.globalAlpha=1;
-
-  // Main canvas is already in 960x540 logical coordinates here.
   ctx.drawImage(fogCanvas,0,0,960,540);
 }
 function drawHome(){
@@ -1132,18 +1167,42 @@ function drawWorld(){
 }
 
 function drawMinimap(){
-  const w=minimap.width,h=minimap.height;mctx.clearRect(0,0,w,h);mctx.fillStyle='#030705';mctx.fillRect(0,0,w,h);
+  const w=minimap.width,h=minimap.height;
   const mx=x=>x/W*w,my=y=>y/H*h;
-  // explored terrain only
-  for(let cy=0;cy<FOG_ROWS;cy++)for(let cx=0;cx<FOG_COLS;cx++){
-    if(!explored[fogIndex(cx,cy)])continue;
-    const x=cx*FOG_CELL,y=cy*FOG_CELL;
-    mctx.fillStyle='#1d3325';mctx.fillRect(mx(x),my(y),Math.ceil(FOG_CELL/W*w)+1,Math.ceil(FOG_CELL/H*h)+1);
+  mctx.setTransform(1,0,0,1,0,0);
+  mctx.clearRect(0,0,w,h);
+
+  // Draw the persistent exploration mask itself, not the old square cell grid.
+  // Visited-but-not-current areas are a muted gray-green; unseen remains black.
+  mctx.save();
+  mctx.imageSmoothingEnabled=true;
+  mctx.drawImage(exploreMask,0,0,w,h);
+  mctx.globalCompositeOperation='source-in';
+  mctx.fillStyle='#4b5650';
+  mctx.fillRect(0,0,w,h);
+  mctx.globalCompositeOperation='destination-over';
+  mctx.fillStyle='#020403';
+  mctx.fillRect(0,0,w,h);
+  mctx.restore();
+
+  // Current sight is brighter on the tactical map, with the same soft circular edge.
+  mctx.save();
+  for(const src of [home,...aliveSquad()]){
+    const rad=src===home?270:visionRadiusFor(src);
+    const sx=mx(src.x),sy=my(src.y),rx=rad/W*w,ry=rad/H*h,rr=Math.max(rx,ry);
+    const g=mctx.createRadialGradient(sx,sy,0,sx,sy,rr);
+    g.addColorStop(0,'rgba(53,84,63,.95)');
+    g.addColorStop(.72,'rgba(53,84,63,.9)');
+    g.addColorStop(1,'rgba(53,84,63,0)');
+    mctx.fillStyle=g;mctx.beginPath();mctx.arc(sx,sy,rr,0,Math.PI*2);mctx.fill();
   }
+  mctx.restore();
+
   mctx.strokeStyle='#425a4c';mctx.lineWidth=2;mctx.strokeRect(1,1,w-2,h-2);
   for(const b of enemyBases){
     if(!exploredAt(b.x,b.y))continue;
-    mctx.fillStyle=b.alive?(BASE_TYPES[b.type].final?'#ff4f57':'#d66a62'):'#665953';const size=BASE_TYPES[b.type].final?8:6;mctx.fillRect(mx(b.x)-size/2,my(b.y)-size/2,size,size);
+    mctx.fillStyle=b.alive?(BASE_TYPES[b.type].final?'#ff4f57':'#d66a62'):'#665953';
+    const size=BASE_TYPES[b.type].final?8:6;mctx.fillRect(mx(b.x)-size/2,my(b.y)-size/2,size,size);
   }
   mctx.fillStyle='#75d8e6';for(const st of exchangeStations)if(exploredAt(st.x,st.y))mctx.fillRect(mx(st.x)-2,my(st.y)-2,4,4);
   mctx.fillStyle=homeUnderAttack>0&&Math.floor(performance.now()/180)%2?'#ff625f':'#ffd36d';mctx.fillRect(mx(home.x)-4,my(home.y)-4,8,8);
@@ -1151,7 +1210,6 @@ function drawMinimap(){
   mctx.fillStyle='#fff';mctx.beginPath();mctx.arc(mx(player.x),my(player.y),3.5,0,Math.PI*2);mctx.fill();
   mctx.fillStyle='#e27469';for(const e of enemies)if(currentlyVisible(e.x,e.y))mctx.fillRect(mx(e.x),my(e.y),2,2);
 }
-
 function updateHud(){
   $('#hpBar').style.width=`${clamp(player.hp/player.maxHp*100,0,100)}%`;$('#hpText').textContent=`${Math.ceil(player.hp)}/${Math.ceil(player.maxHp)}`;
   $('#baseBar').style.width=`${clamp(home.hp/home.maxHp*100,0,100)}%`;$('#baseText').textContent=`${Math.ceil(home.hp)}/${Math.ceil(home.maxHp)}`;
@@ -1288,5 +1346,5 @@ if(!restoredRun && !meta.introSeen){
 }
 
 if(DEBUG){
-  $('#debugRevealBtn').onclick=()=>{explored.fill(1);event('DEBUG · 전체 지도 공개',1.2);};
+  $('#debugRevealBtn').onclick=()=>{explored.fill(1);explorationTrail=[[W/2,H/2,Math.max(W,H)]];rebuildExplorationMask();event('DEBUG · 전체 지도 공개',1.2);};
 }
