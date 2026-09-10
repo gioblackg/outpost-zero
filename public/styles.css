@@ -21,3 +21,58 @@ button,a{font:inherit}.pixel-panel{background:linear-gradient(#22342b,#18271f);b
 @media (max-width:850px){.hub-grid{grid-template-columns:1fr}.topbar{flex-direction:column}.account-stats{justify-content:flex-start}.deploy{flex-direction:column;align-items:stretch}.deploy-btn{width:100%}.base-world{padding:10px}.upgrade-grid{gap:7px}.upgrade-card{padding:10px;min-height:120px}.compact-hud{width:38vw}.hud-line{grid-template-columns:32px 1fr auto;font-size:9px}.resource-hud{gap:6px}.joystick{width:100px;height:100px}.joystick>div{left:24px;top:24px}.skill-btn{width:74px;height:74px}.skill-btn.secondary{width:62px;height:62px}}
 @media (orientation:portrait) and (max-width:900px){.game-page .rotate-hint{display:flex}.game-page .game-shell{display:none}}
 @media (pointer:fine){.mobile-controls{opacity:.72}.joystick{display:none}.skill-stack{bottom:20px}}
+
+/* =========================================================
+   OUTPOST ZERO V2 — squad assault HUD / terminal / alerts
+   ========================================================= */
+.v2-game .compact-hud{width:min(330px,38vw)}
+.v2-game .bar.threat i{background:#ef756e}
+.v2-game .v2-resource{padding-right:9px;max-width:49vw}
+.v2-game .v2-resource div{min-width:48px}
+.v2-game .v2-resource .icon-btn{font-size:15px;cursor:pointer}
+.v2-game .timer-hud{min-width:205px}
+.v2-game .timer-hud span{display:block;max-width:230px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.minimap-wrap{position:absolute;z-index:11;right:max(10px,env(safe-area-inset-right));top:max(76px,calc(env(safe-area-inset-top) + 66px));padding:7px;background:#102019e8;width:236px;pointer-events:none}
+.minimap-title{display:flex;align-items:center;justify-content:space-between;margin:0 2px 5px;font-size:8px;color:#aeb8b0;letter-spacing:.08em}
+.minimap-title b{font-size:9px;color:#9fe477}
+.minimap-title b[data-level="MID"]{color:#ffd36d}.minimap-title b[data-level="HIGH"],.minimap-title b[data-level="MAX"]{color:#ff857b}
+#minimapCanvas{display:block;width:220px;height:130px;image-rendering:pixelated;background:#08120d}
+
+.battle-menu-btn{position:absolute;z-index:13;right:max(10px,env(safe-area-inset-right));top:max(236px,calc(env(safe-area-inset-top) + 226px));width:236px;padding:9px 12px;border:0;color:#142017;background:#d9f06a;box-shadow:0 4px 0 #697633;cursor:pointer;text-align:center;font-weight:900}
+.battle-menu-btn span,.battle-menu-btn small{display:block}.battle-menu-btn small{font-size:9px;margin-top:3px;color:#465126}
+.battle-menu-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #697633}
+
+.exchange-btn{position:absolute;z-index:17;left:50%;bottom:max(26px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;align-items:center;gap:9px;border:3px solid #17373c;background:#83e0e9;color:#153039;padding:10px 14px;box-shadow:0 5px 0 #3c7680;font-weight:900;cursor:pointer}
+.exchange-btn b{display:grid;place-items:center;min-width:28px;height:26px;background:#153039;color:#d7f6f5;padding:0 5px}.exchange-btn span{font-size:12px}
+
+.v2-skill-stack{right:max(30px,env(safe-area-inset-right));bottom:max(28px,env(safe-area-inset-bottom))}
+.skill-btn.stim-btn{width:92px;height:92px;background:#e7df73;box-shadow:0 5px 0 #766c2d;border-color:#263222}
+.skill-btn.stim-btn.active{background:#fff09c;box-shadow:0 0 0 6px #d9f06a55,0 5px 0 #766c2d;animation:stimPulse .45s steps(2,end) infinite}
+@keyframes stimPulse{50%{transform:scale(1.05)}}
+
+.base-alarm{position:absolute;z-index:18;left:50%;top:138px;transform:translateX(-50%);background:#531c1ce8;border:3px solid #ff786e;color:#fff;padding:8px 14px;font-size:12px;font-weight:900;box-shadow:0 0 0 4px #5e242466;animation:alarmBlink .55s steps(2,end) infinite;pointer-events:none}
+@keyframes alarmBlink{50%{opacity:.55}}
+.base-arrow{position:absolute;z-index:18;left:50%;top:50%;transform-origin:center;pointer-events:none;display:flex;flex-direction:column;align-items:center;color:#ff7f75;text-shadow:0 2px #391313;filter:drop-shadow(0 0 5px #ff665555)}
+.base-arrow span{font-size:44px;line-height:.7}.base-arrow small{font-size:10px;font-weight:900;background:#421818dd;padding:3px 5px;margin-top:5px}
+.damage-vignette{position:absolute;z-index:8;inset:0;pointer-events:none;box-shadow:inset 0 0 0 0 rgba(255,59,50,0);transition:box-shadow .12s}.damage-vignette.active{box-shadow:inset 0 0 55px 14px rgba(255,59,50,.52)}
+
+.battle-menu-modal{max-width:760px;padding:18px}
+.menu-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.menu-head h2{margin:4px 0 0}.menu-wallet{text-align:right;border:2px solid #46614f;background:#0d1712;padding:8px 12px}.menu-wallet span{display:block;color:#9aa99c;font-size:9px}.menu-wallet b{display:block;margin-top:2px;color:#ffd36d;font-size:18px}.menu-wallet i{font-style:normal}
+.menu-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:15px 0 10px}.menu-tab{border:2px solid #3c5446;background:#101a15;color:#aebcaf;padding:10px;font-weight:900;cursor:pointer}.menu-tab.active{background:#d9f06a;color:#172019;border-color:#93a63c}
+.menu-note{margin:8px 0 12px;padding:8px 10px;background:#0d1712;border-left:4px solid #566f5e;color:#aebcaf;font-size:10px;line-height:1.5}
+.fixed-upgrade-grid,.shop-grid{display:grid;gap:8px;margin-bottom:14px}.fixed-upgrade-card,.shop-card{display:grid;grid-template-columns:50px 1fr auto;gap:10px;align-items:center;padding:10px;border:2px solid #395044;background:#111c16}.fixed-upgrade-card strong,.shop-card strong{display:block;font-size:13px}.fixed-upgrade-card strong em{font-style:normal;color:#d9f06a;font-size:10px;margin-left:4px}.fixed-upgrade-card span,.shop-card span{display:block;color:#bdc8be;font-size:10px;margin-top:3px}.fixed-upgrade-card small,.shop-card small{display:block;color:#778b7e;font-size:9px;margin-top:4px}.upgrade-icon,.unit-avatar{width:44px;height:44px;display:grid;place-items:center;border:3px solid #26392e;background:#d9f06a;color:#162118;font-size:20px;font-weight:900;box-shadow:3px 3px 0 #08100c}.rifle-avatar{background:#9edcf1}.flame-avatar{background:#e59a5e}.fixed-upgrade-card .btn,.shop-card .btn{min-width:78px}
+.settings-modal{max-width:560px}.setting-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:16px;background:#101a15;border:2px solid #395044;padding:14px;margin:15px 0}.setting-row strong,.setting-row small{display:block}.setting-row small{margin-top:5px;color:#9aab9d;font-size:10px}.keycap{min-width:85px;height:48px;border:3px solid #27372f;background:#e8e0c7;color:#162019;box-shadow:0 5px 0 #817966;font-weight:900;font-size:15px;cursor:pointer}.settings-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:12px}
+.v2-game .end-rewards{grid-template-columns:repeat(4,1fr)}
+
+@media (max-width:900px){
+  .v2-game .compact-hud{width:34vw}.v2-game .v2-resource{max-width:53vw}.v2-game .v2-resource div{min-width:38px}.v2-game .v2-resource span{font-size:8px}.v2-game .v2-resource b{font-size:12px}
+  .minimap-wrap{width:180px;top:67px;padding:5px}.minimap-title{font-size:7px}#minimapCanvas{width:168px;height:99px}
+  .battle-menu-btn{width:180px;top:184px;padding:7px 8px}.battle-menu-btn span{font-size:11px}
+  .base-alarm{top:112px;font-size:10px;padding:6px 9px}
+  .skill-btn.stim-btn{width:80px;height:80px}
+  .fixed-upgrade-card,.shop-card{grid-template-columns:42px 1fr auto;padding:8px;gap:8px}.upgrade-icon,.unit-avatar{width:38px;height:38px}.fixed-upgrade-card .btn,.shop-card .btn{min-width:68px;padding:7px 8px;font-size:10px}
+  .battle-menu-modal{max-height:94vh;overflow:auto;padding:12px}.menu-note{margin:5px 0 8px}.fixed-upgrade-grid,.shop-grid{gap:5px;margin-bottom:8px}
+  .v2-game .end-rewards{grid-template-columns:repeat(2,1fr)}
+}
+@media (pointer:fine){.v2-game .mobile-controls{opacity:.94}.v2-game .joystick{display:none}.v2-game .v2-skill-stack{bottom:24px}.v2-game .stim-btn{opacity:.9}}

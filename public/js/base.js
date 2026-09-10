@@ -53,7 +53,7 @@ function renderTraining(){
   const defs=[
     ['damage','탄도 연구','출격 공격력 +2% / LV'],
     ['hp','생존 장비','출격 최대 체력 +3 / LV'],
-    ['salvage','회수 기술','출격 고철 보상 +1.5% / LV']
+    ['salvage','회수 기술','카르마 환전율 +1.5% / LV']
   ];
   const holder=$('#trainingOptions'); holder.innerHTML='';
   for(const [id,name,desc] of defs){

@@ -6,47 +6,91 @@
   <meta name="theme-color" content="#101915" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="stylesheet" href="/styles.css" />
-  <title>OUTPOST ZERO - Sortie</title>
+  <title>OUTPOST ZERO V2 - Sortie</title>
 </head>
-<body class="game-page">
+<body class="game-page v2-game">
   <div id="rotateHint" class="rotate-hint">기기를 가로로 돌려주세요.</div>
   <div class="game-shell">
     <canvas id="gameCanvas" width="960" height="540"></canvas>
 
     <div class="hud top-left pixel-panel compact-hud">
-      <div class="hud-line"><span>HP</span><div class="bar"><i id="hpBar"></i></div><b id="hpText">100/100</b></div>
-      <div class="hud-line"><span>BASE</span><div class="bar base"><i id="baseBar"></i></div><b id="baseText">1000/1000</b></div>
-      <div class="hud-line"><span>XP</span><div class="bar xp"><i id="xpBar"></i></div><b id="xpText">Lv.1</b></div>
+      <div class="hud-line"><span>HP</span><div class="bar"><i id="hpBar"></i></div><b id="hpText">120/120</b></div>
+      <div class="hud-line"><span>BASE</span><div class="bar base"><i id="baseBar"></i></div><b id="baseText">1400/1400</b></div>
+      <div class="hud-line"><span>THREAT</span><div class="bar threat"><i id="threatBar"></i></div><b id="threatText">12%</b></div>
     </div>
 
     <div class="hud top-center pixel-panel timer-hud">
-      <b id="timerText">12:00</b>
-      <span id="waveText">웨이브 1</span>
+      <b id="timerText">10:00</b>
+      <span id="missionText">적 지휘기지를 파괴하라</span>
     </div>
 
-    <div class="hud top-right pixel-panel resource-hud">
-      <div><span>고철</span><b id="scrapText">0</b></div>
-      <div><span>처치</span><b id="killText">0</b></div>
-      <button id="soundBtn" class="icon-btn" title="사운드">♪</button>
+    <div class="hud top-right pixel-panel resource-hud v2-resource">
+      <div><span>카르마</span><b id="karmaText">0</b></div>
+      <div><span>크레딧</span><b id="creditText">0</b></div>
+      <div><span>분대</span><b id="squadText">1/10</b></div>
+      <div><span>거점</span><b id="baseCountText">0/5</b></div>
+      <button id="soundBtn" class="icon-btn" title="효과음">🔊</button>
+      <button id="settingsBtn" class="icon-btn" title="설정">⚙</button>
     </div>
+
+    <div class="minimap-wrap pixel-panel">
+      <div class="minimap-title"><span>TACTICAL MAP</span><b id="threatLabel">LOW</b></div>
+      <canvas id="minimapCanvas" width="220" height="130"></canvas>
+    </div>
+
+    <button id="menuBtn" class="battle-menu-btn pixel-panel"><span>강화 · 상점</span><small>U · 두 번 터치</small></button>
+    <button id="exchangeBtn" class="exchange-btn hidden"><b>E</b><span>카르마 교환</span></button>
 
     <div id="eventBanner" class="event-banner"></div>
+    <div id="baseAlarm" class="base-alarm hidden">🚨 본기지 공격 중</div>
+    <div id="baseArrow" class="base-arrow hidden"><span>⌁</span><small>BASE</small></div>
+    <div id="damageVignette" class="damage-vignette"></div>
 
     <div class="mobile-controls">
       <div id="joyBase" class="joystick"><div id="joyKnob"></div></div>
-      <div class="skill-stack">
-        <button id="pulseBtn" class="skill-btn"><span>펄스</span><small id="pulseCd">READY</small></button>
-        <button id="dashBtn" class="skill-btn secondary"><span>대시</span><small id="dashCd">READY</small></button>
+      <div class="skill-stack v2-skill-stack">
+        <button id="stimBtn" class="skill-btn stim-btn"><span>STIM</span><small id="stimCd">R · READY</small></button>
       </div>
     </div>
 
-    <div id="levelUp" class="overlay hidden">
-      <section class="choice-modal pixel-panel">
-        <span class="eyebrow">LEVEL UP</span>
-        <h2>강화를 선택하세요</h2>
-        <p id="rerollInfo" class="muted"></p>
-        <div id="upgradeChoices" class="upgrade-grid"></div>
-        <button id="rerollBtn" class="btn small hidden">선택지 다시 보기</button>
+    <div id="battleMenu" class="overlay hidden">
+      <section class="choice-modal pixel-panel battle-menu-modal">
+        <div class="menu-head">
+          <div>
+            <span class="eyebrow">FIELD TERMINAL</span>
+            <h2>분대 터미널</h2>
+          </div>
+          <div class="menu-wallet"><span>사용 가능</span><b><i id="menuCredit">0</i> C</b></div>
+        </div>
+        <div class="menu-tabs">
+          <button class="menu-tab active" data-tab="upgrade">강화</button>
+          <button class="menu-tab" data-tab="shop">상점</button>
+        </div>
+        <div id="upgradeTab" class="menu-tab-content">
+          <p class="menu-note">강화는 분대 전체에 적용됩니다. 원하는 능력만 계속 올릴 수 있습니다.</p>
+          <div id="upgradeList" class="fixed-upgrade-grid"></div>
+        </div>
+        <div id="shopTab" class="menu-tab-content hidden">
+          <p class="menu-note">플레이어 포함 최대 10명. 동료는 자동으로 따라다니며 전투합니다.</p>
+          <div id="shopList" class="shop-grid"></div>
+        </div>
+        <button id="closeMenuBtn" class="btn wide">전투로 복귀</button>
+      </section>
+    </div>
+
+    <div id="settingsOverlay" class="overlay hidden">
+      <section class="choice-modal pixel-panel settings-modal">
+        <span class="eyebrow">CONTROL SETTINGS</span>
+        <h2>조작 설정</h2>
+        <div class="setting-row">
+          <div><strong>스팀팩 단축키</strong><small>기본값 R · 원하는 키로 변경할 수 있습니다.</small></div>
+          <button id="stimKeyBtn" class="keycap">R</button>
+        </div>
+        <p id="keyCaptureHint" class="menu-note hidden">지금 원하는 키를 누르세요. ESC를 누르면 취소됩니다.</p>
+        <div class="settings-actions">
+          <button id="resetStimKeyBtn" class="btn small">R로 초기화</button>
+          <button id="closeSettingsBtn" class="btn primary">닫기</button>
+        </div>
       </section>
     </div>
 
@@ -62,8 +106,9 @@
 
     <div id="debugPanel" class="debug-panel hidden">
       <button id="debugTimeBtn">+60초</button>
-      <button id="debugBossBtn">보스</button>
-      <button id="debugXpBtn">레벨업</button>
+      <button id="debugThreatBtn">위협 +20</button>
+      <button id="debugCreditsBtn">+1000 C</button>
+      <button id="debugSquadBtn">소총병+</button>
     </div>
   </div>
 

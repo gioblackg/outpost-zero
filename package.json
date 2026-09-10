@@ -1,8 +1,8 @@
 {
   "name": "outpost-zero",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "OUTPOST ZERO - solo top-down survival + base progression prototype",
+  "description": "OUTPOST ZERO V2 - solo squad assault, karma exchange, direct upgrades and enemy bases",
   "scripts": {
     "start": "node server.js"
   },
