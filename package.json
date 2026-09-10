@@ -1,6 +1,6 @@
 {
   "name": "outpost-zero",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "OUTPOST ZERO V2 - solo squad assault, karma exchange, direct upgrades and enemy bases",
   "scripts": {

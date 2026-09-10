@@ -1,4 +1,4 @@
-import { loadMeta, saveMeta, getRunPerks } from './storage.js';
+import { loadMeta, saveMeta, getRunPerks } from './storage.js?v=2.0.1';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#gameCanvas');

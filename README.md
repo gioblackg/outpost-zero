@@ -56,3 +56,8 @@ GitHub + Render에서 바로 배포 가능한 1인용 탑다운 2D 프로토타�
 
 ## 저장
 기지/영구 진행과 설정은 브라우저 localStorage에 저장됩니다. 아직 계정/클라우드 저장은 없습니다.
+
+
+## V2.0.1 hotfix
+- 브라우저가 V0.1의 game.js를 캐시해 V2 HTML과 충돌하면서 전투 화면이 멈추는 문제를 수정했습니다.
+- CSS/JS에 버전 쿼리를 추가하고 개발 중 HTML/CSS/JS/JSON은 no-store로 제공합니다.

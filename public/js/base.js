@@ -1,4 +1,4 @@
-import { BUILDINGS, STORIES, loadMeta, saveMeta, accountLevelFromXp, pendingEnergy, collectEnergy, getSynergies, buildingIndex } from './storage.js';
+import { BUILDINGS, STORIES, loadMeta, saveMeta, accountLevelFromXp, pendingEnergy, collectEnergy, getSynergies, buildingIndex } from './storage.js?v=2.0.1';
 
 const meta = loadMeta();
 let selectedCell = null;

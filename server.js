@@ -49,7 +49,7 @@ const server = http.createServer((req, res) => {
     const ext = path.extname(filePath).toLowerCase();
     res.writeHead(200, {
       'Content-Type': MIME[ext] || 'application/octet-stream',
-      'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=3600'
+      'Cache-Control': ['.html','.css','.js','.json'].includes(ext) ? 'no-store' : 'public, max-age=3600'
     });
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(filePath).pipe(res);
