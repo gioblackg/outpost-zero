@@ -1,4 +1,4 @@
-import { loadMeta, saveMeta, getRunPerks, accountLevelFromXp, loadRun, saveRun, clearRun } from './storage.js?v=4.0.2';
+import { loadMeta, saveMeta, getRunPerks, accountLevelFromXp, loadRun, saveRun, clearRun } from './storage.js?v=4.0.3';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#gameCanvas');
@@ -6,6 +6,13 @@ const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 const minimap = $('#minimapCanvas');
 const mctx = minimap.getContext('2d');
+// Fog is composed on a separate logical 960x540 canvas, then laid over the world.
+// This prevents the fog mask from erasing world pixels and gives three reliable states:
+// unseen = black / explored = gray / currently visible = clear.
+const fogCanvas = document.createElement('canvas');
+fogCanvas.width = 960;
+fogCanvas.height = 540;
+const fctx = fogCanvas.getContext('2d');
 mctx.imageSmoothingEnabled = false;
 
 const meta = loadMeta();
@@ -253,9 +260,8 @@ function exploredAt(x,y){
   return explored[fogIndex(cx,cy)]===1;
 }
 function updateExploration(force=false){
-  fogClock-=force?999:0;
-  // Three explicit fog states are maintained per cell:
-  // 0 = never visited (black), explored=1/visible=0 = remembered (gray), visible=1 = current vision (clear).
+  // Mark every fog cell that intersects a sight circle as explored. Using cell-centre
+  // checks created blocky gaps at the edge of the player's sight in V4.0.2.
   visibleFog.fill(0);
   const sources=[home,...aliveSquad()];
   for(const src of sources){
@@ -263,8 +269,10 @@ function updateExploration(force=false){
     const minx=clamp(Math.floor((src.x-rad)/FOG_CELL),0,FOG_COLS-1),maxx=clamp(Math.floor((src.x+rad)/FOG_CELL),0,FOG_COLS-1);
     const miny=clamp(Math.floor((src.y-rad)/FOG_CELL),0,FOG_ROWS-1),maxy=clamp(Math.floor((src.y+rad)/FOG_CELL),0,FOG_ROWS-1);
     for(let cy=miny;cy<=maxy;cy++)for(let cx=minx;cx<=maxx;cx++){
-      const x=cx*FOG_CELL+FOG_CELL/2,y=cy*FOG_CELL+FOG_CELL/2;
-      if(Math.hypot(x-src.x,y-src.y)<=rad){
+      const left=cx*FOG_CELL, top=cy*FOG_CELL;
+      const closestX=clamp(src.x,left,left+FOG_CELL);
+      const closestY=clamp(src.y,top,top+FOG_CELL);
+      if(Math.hypot(closestX-src.x,closestY-src.y)<=rad){
         const idx=fogIndex(cx,cy);
         visibleFog[idx]=1;
         explored[idx]=1;
@@ -990,23 +998,60 @@ function drawObstacle(o){
 }
 
 function drawFogOverlay(){
-  const halfW=520,halfH=310;
-  const minCx=clamp(Math.floor((cam.x-halfW)/FOG_CELL)-1,0,FOG_COLS-1),maxCx=clamp(Math.floor((cam.x+halfW)/FOG_CELL)+1,0,FOG_COLS-1);
-  const minCy=clamp(Math.floor((cam.y-halfH)/FOG_CELL)-1,0,FOG_ROWS-1),maxCy=clamp(Math.floor((cam.y+halfH)/FOG_CELL)+1,0,FOG_ROWS-1);
-  for(let cy=minCy;cy<=maxCy;cy++)for(let cx=minCx;cx<=maxCx;cx++){
-    const x=cx*FOG_CELL,y=cy*FOG_CELL,idx=fogIndex(cx,cy);
-    if(visibleFog[idx]) continue; // current sight: fully clear
-    if(explored[idx]){
-      // Previously explored: keep terrain memory visible as a neutral gray veil.
-      ctx.fillStyle='rgba(88,92,90,.68)';
-    }else{
-      // Never explored: completely black.
-      ctx.fillStyle='rgb(0,0,0)';
-    }
-    ctx.fillRect(x-1,y-1,FOG_CELL+2,FOG_CELL+2);
-  }
-}
+  // Build a screen-space fog layer. First everything is black.
+  fctx.setTransform(1,0,0,1,0,0);
+  fctx.clearRect(0,0,960,540);
+  fctx.globalCompositeOperation='source-over';
+  fctx.globalAlpha=1;
+  fctx.fillStyle='#000';
+  fctx.fillRect(0,0,960,540);
 
+  // Areas visited before are not black: show the remembered terrain through a gray veil.
+  // Slight overlap between cells removes hairline seams.
+  const halfW=520, halfH=310;
+  const minCx=clamp(Math.floor((cam.x-halfW)/FOG_CELL)-2,0,FOG_COLS-1),maxCx=clamp(Math.floor((cam.x+halfW)/FOG_CELL)+2,0,FOG_COLS-1);
+  const minCy=clamp(Math.floor((cam.y-halfH)/FOG_CELL)-2,0,FOG_ROWS-1),maxCy=clamp(Math.floor((cam.y+halfH)/FOG_CELL)+2,0,FOG_ROWS-1);
+
+  fctx.globalCompositeOperation='destination-out';
+  fctx.fillStyle='#fff';
+  for(let cy=minCy;cy<=maxCy;cy++)for(let cx=minCx;cx<=maxCx;cx++){
+    if(!explored[fogIndex(cx,cy)])continue;
+    const sx=cx*FOG_CELL-cam.x+480;
+    const sy=cy*FOG_CELL-cam.y+270;
+    fctx.fillRect(sx-1,sy-1,FOG_CELL+2,FOG_CELL+2);
+  }
+
+  fctx.globalCompositeOperation='source-over';
+  fctx.fillStyle='rgba(72,76,74,.68)';
+  for(let cy=minCy;cy<=maxCy;cy++)for(let cx=minCx;cx<=maxCx;cx++){
+    if(!explored[fogIndex(cx,cy)])continue;
+    const sx=cx*FOG_CELL-cam.x+480;
+    const sy=cy*FOG_CELL-cam.y+270;
+    fctx.fillRect(sx-1,sy-1,FOG_CELL+2,FOG_CELL+2);
+  }
+
+  // Current sight must always be fully clear. We punch circular sight holes out of
+  // BOTH the black unseen layer and the gray remembered layer.
+  fctx.globalCompositeOperation='destination-out';
+  const sources=[home,...aliveSquad()];
+  for(const src of sources){
+    const rad=src===home?270:visionRadiusFor(src);
+    const sx=src.x-cam.x+480, sy=src.y-cam.y+270;
+    const g=fctx.createRadialGradient(sx,sy,Math.max(0,rad-28),sx,sy,rad);
+    g.addColorStop(0,'rgba(0,0,0,1)');
+    g.addColorStop(.72,'rgba(0,0,0,1)');
+    g.addColorStop(1,'rgba(0,0,0,0)');
+    fctx.fillStyle=g;
+    fctx.beginPath();
+    fctx.arc(sx,sy,rad,0,Math.PI*2);
+    fctx.fill();
+  }
+  fctx.globalCompositeOperation='source-over';
+  fctx.globalAlpha=1;
+
+  // Main canvas is already in 960x540 logical coordinates here.
+  ctx.drawImage(fogCanvas,0,0,960,540);
+}
 function drawHome(){
   ctx.fillStyle='#213a2c';ctx.beginPath();ctx.arc(home.x,home.y,home.r+45,0,Math.PI*2);ctx.fill();
   ctx.strokeStyle='#6d8a6f';ctx.lineWidth=5;ctx.stroke();
@@ -1082,8 +1127,8 @@ function drawWorld(){
   for(const a of allies)drawUnit(a,false);drawUnit(player,true);
   for(const p of particles){if(!currentlyVisible(p.x,p.y))continue;ctx.globalAlpha=Math.max(0,Math.min(1,p.life*2.2));ctx.fillStyle=p.color||'#f0c36d';ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);}ctx.globalAlpha=1;
   ctx.font='bold 12px monospace';ctx.textAlign='center';for(const f of floating){if(!currentlyVisible(f.x,f.y))continue;ctx.globalAlpha=Math.min(1,f.life*2);ctx.fillStyle=f.color||'#fff';ctx.fillText(f.text,f.x,f.y);}ctx.globalAlpha=1;
-  drawFogOverlay();
   ctx.restore();
+  drawFogOverlay();
 }
 
 function drawMinimap(){
