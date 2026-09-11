@@ -1,4 +1,4 @@
-import { loadMeta, saveMeta, accountLevelFromXp, loadRun } from './storage.js?v=5.2.1';
+import { loadMeta, saveMeta, accountLevelFromXp, loadRun } from './storage.js?v=5.3.0';
 const $ = s => document.querySelector(s);
 const meta = loadMeta();
 const lv = accountLevelFromXp(meta.accountXp);
@@ -6,11 +6,11 @@ const run = loadRun();
 const c = meta.campaign;
 
 const STAGES = [
-  {id:1,name:'추락지점',size:'소형',diff:'보통',desc:'추락선에서만 카르마 교환 · 다수의 약한 적'},
-  {id:2,name:'폐허 외곽',size:'중소형',diff:'보통+',desc:'더 넓은 전장 · 원거리 적 등장'},
-  {id:3,name:'산업지대',size:'중형',diff:'어려움',desc:'첫 외부 카르마 교환소 등장'},
-  {id:4,name:'고지대',size:'대형',diff:'어려움+',desc:'언덕·장애물 증가 · 다양한 공격 패턴'},
-  {id:5,name:'봉쇄선',size:'특대형',diff:'위험',desc:'외부 교환소 2개 · 대규모 적 거점'}
+  {id:1,name:'추락지점',size:'소형',diff:'보통',desc:'추락선에서만 카르마 교환 · 대형 괴수 3체 추적'},
+  {id:2,name:'폐허 외곽',size:'중소형',diff:'보통+',desc:'더 넓은 전장 · 거대 괴수와 원거리 적 등장'},
+  {id:3,name:'산업지대',size:'중형',diff:'어려움',desc:'첫 외부 카르마 교환소 · 증식거수 등장'},
+  {id:4,name:'고지대',size:'대형',diff:'어려움+',desc:'언덕·장애물 증가 · 갑각거수의 강공격'},
+  {id:5,name:'봉쇄선',size:'특대형',diff:'위험',desc:'외부 교환소 2개 · 다수의 대형 괴수'}
 ];
 
 $('#profileLine').innerHTML = `<span>LV.${lv.level}</span><span>클리어 ${meta.completedStages.length}/20</span><span>공격 ${c.attack}</span><span>방어 ${c.defense}</span><span>속도 ${c.speed}</span>`;

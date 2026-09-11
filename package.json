@@ -1,8 +1,8 @@
 {
   "name": "outpost-zero",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "private": true,
-  "description": "OUTPOST ZERO V5.2 - fine fog, enemy-base signals, escalating horde balance",
+  "description": "OUTPOST ZERO V5.3 - organic fog restoration and roaming giant monsters",
   "scripts": {
     "start": "node server.js"
   },

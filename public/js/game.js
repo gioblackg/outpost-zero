@@ -1,4 +1,4 @@
-import { loadMeta, saveMeta, loadRun, saveRun, clearRun, resetCampaign } from './storage.js?v=5.2.1';
+import { loadMeta, saveMeta, loadRun, saveRun, clearRun, resetCampaign } from './storage.js?v=5.3.0';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#gameCanvas'), ctx = canvas.getContext('2d');
@@ -14,11 +14,11 @@ if (NEW_RUN) clearRun();
 if (DEBUG) $('#debugPanel').classList.remove('hidden');
 
 const STAGES = {
-  1:{name:'추락지점',w:2400,h:1500,time:600,diff:1,exchange:0,bases:[['W','서부 전초기지','outpost',.18,.34],['E','동부 전초기지','outpost',.82,.37],['C','북부 지휘기지','command',.50,.13]]},
-  2:{name:'폐허 외곽',w:2800,h:1750,time:600,diff:1.12,exchange:0,bases:[['W','서부 전초기지','outpost',.18,.33],['E','동부 전초기지','outpost',.82,.34],['F','남부 생산기지','factory',.30,.82],['C','북부 지휘기지','command',.52,.12]]},
-  3:{name:'산업지대',w:3200,h:1950,time:600,diff:1.25,exchange:1,bases:[['W','서부 전초기지','outpost',.16,.32],['E','동부 전초기지','outpost',.84,.32],['F','남서 생산기지','factory',.25,.82],['T','동남 요새','fortress',.78,.80],['C','북부 지휘기지','command',.50,.11]]},
-  4:{name:'고지대',w:3600,h:2200,time:600,diff:1.4,exchange:1,bases:[['W1','서부 전초기지','outpost',.15,.30],['E1','동부 전초기지','outpost',.85,.31],['F','남서 생산기지','factory',.23,.82],['T','동남 요새','fortress',.80,.80],['M','북서 요새','fortress',.29,.17],['C','북부 지휘기지','command',.57,.11]]},
-  5:{name:'봉쇄선',w:4000,h:2500,time:600,diff:1.58,exchange:2,bases:[['W1','서부 전초기지','outpost',.13,.31],['E1','동부 전초기지','outpost',.87,.31],['F1','남서 생산기지','factory',.20,.83],['F2','남동 생산기지','factory',.82,.82],['T1','서북 요새','fortress',.30,.16],['T2','동북 요새','fortress',.72,.17],['C','북부 지휘기지','command',.51,.08]]}
+  1:{name:'추락지점',w:2400,h:1500,time:600,diff:1,exchange:0,bases:[['W','서부 균열거수','outpost',.18,.34],['E','동부 균열거수','outpost',.82,.37],['C','북부 심연군주','command',.50,.13]]},
+  2:{name:'폐허 외곽',w:2800,h:1750,time:600,diff:1.12,exchange:0,bases:[['W','서부 균열거수','outpost',.18,.33],['E','동부 균열거수','outpost',.82,.34],['F','남부 증식거수','factory',.30,.82],['C','북부 심연군주','command',.52,.12]]},
+  3:{name:'산업지대',w:3200,h:1950,time:600,diff:1.25,exchange:1,bases:[['W','서부 균열거수','outpost',.16,.32],['E','동부 균열거수','outpost',.84,.32],['F','남서 증식거수','factory',.25,.82],['T','동남 갑각거수','fortress',.78,.80],['C','북부 심연군주','command',.50,.11]]},
+  4:{name:'고지대',w:3600,h:2200,time:600,diff:1.4,exchange:1,bases:[['W1','서부 균열거수','outpost',.15,.30],['E1','동부 균열거수','outpost',.85,.31],['F','남서 증식거수','factory',.23,.82],['T','동남 갑각거수','fortress',.80,.80],['M','북서 갑각거수','fortress',.29,.17],['C','북부 심연군주','command',.57,.11]]},
+  5:{name:'봉쇄선',w:4000,h:2500,time:600,diff:1.58,exchange:2,bases:[['W1','서부 균열거수','outpost',.13,.31],['E1','동부 균열거수','outpost',.87,.31],['F1','남서 증식거수','factory',.20,.83],['F2','남동 증식거수','factory',.82,.82],['T1','서북 갑각거수','fortress',.30,.16],['T2','동북 갑각거수','fortress',.72,.17],['C','북부 심연군주','command',.51,.08]]}
 };
 
 // V5.2 balance target: low enemy HP + high count + increasingly dense hordes.
@@ -45,7 +45,7 @@ const runStats={attack:Number(campaign.attack)||15,defense:Number(campaign.defen
 const player={kind:'player',type:'rifle',x:wreck.x+140,y:wreck.y+10,r:15,maxHp:100,hp:100,burstShots:0,burstClock:0,fireClock:0,aim:0,recoil:0,muzzle:0,hit:0};
 const cam={x:player.x,y:player.y};
 let enemies=[],enemyBullets=[],tracers=[],particles=[],corpses=[],floating=[];
-let gameTime=0,runKarma=0,credits=Number(campaign.credits)||0,kills=0,destroyedBases=0,paused=false,ended=false,finalHold=0,finalDestroyed=false;
+let gameTime=0,runKarma=0,credits=Number(campaign.credits)||0,kills=0,defeatedTitans=0,paused=false,ended=false,finalHold=0,finalDestroyed=false;
 let stimRemaining=0,hordeClock=18,lastSurgeLevel=1;
 let last=performance.now(),autosaveClock=0,bannerClock=0,lastTerrain='',terrainClock=0;
 const keys={};
@@ -77,44 +77,37 @@ function buildTerrain(){
 buildTerrain();
 function pointRect(x,y,r){return x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h}
 function circleRect(x,y,rad,r){const nx=clamp(x,r.x,r.x+r.w),ny=clamp(y,r.y,r.y+r.h);return Math.hypot(x-nx,y-ny)<rad}
-function blockedStatic(x,y,rad=12,ignoreBaseId=null,projectile=false){if(x<rad||x>W-rad||y<rad||y>H-rad)return true;for(const o of obstacles){if(o.type==='circle'&&Math.hypot(x-o.x,y-o.y)<rad+o.r)return true;if(o.type==='rect'&&circleRect(x,y,rad,o))return true}if(!projectile&&Math.hypot(x-wreck.x,y-wreck.y)<rad+wreck.r*.72)return true;if(typeof enemyBases!=='undefined'){for(const b of enemyBases){if(b.id===ignoreBaseId)continue;const rr=b.alive?b.r*.76:b.r*.52;if(Math.hypot(x-b.x,y-b.y)<rad+rr)return true}}return false}
+function blockedStatic(x,y,rad=12,ignoreBaseId=null,projectile=false){if(x<rad||x>W-rad||y<rad||y>H-rad)return true;for(const o of obstacles){if(o.type==='circle'&&Math.hypot(x-o.x,y-o.y)<rad+o.r)return true;if(o.type==='rect'&&circleRect(x,y,rad,o))return true}if(!projectile&&Math.hypot(x-wreck.x,y-wreck.y)<rad+wreck.r*.72)return true;if(typeof enemyTitans!=='undefined'){for(const b of enemyTitans){if(b.id===ignoreBaseId)continue;const rr=b.alive?b.r*.76:b.r*.52;if(Math.hypot(x-b.x,y-b.y)<rad+rr)return true}}return false}
 function blocked(x,y,rad=12){return blockedStatic(x,y,rad)}
 function terrainAt(x,y){for(const z of swamps)if(Math.hypot(x-z.x,y-z.y)<z.r)return {name:'늪지 · 이동속도 감소',speed:.78,vision:1};for(const z of forests)if(Math.hypot(x-z.x,y-z.y)<z.r)return {name:'수풀 · 시야 감소',speed:.94,vision:.78};for(const z of plateaus)if(pointRect(x,y,z))return {name:'고지대 · 사거리 증가',speed:1,vision:1.17,high:true};for(const r of roads){const vx=r.x2-r.x1,vy=r.y2-r.y1,c=vx*vx+vy*vy||1,t=clamp(((x-r.x1)*vx+(y-r.y1)*vy)/c,0,1);if(Math.hypot(x-(r.x1+t*vx),y-(r.y1+t*vy))<r.w/2)return {name:'도로 · 이동속도 증가',speed:1.08,vision:1}}return{name:'',speed:1,vision:1}}
 function move(u,nx,ny,speed,dt){const step=speed*terrainAt(u.x,u.y).speed*dt,ox=u.x,oy=u.y,tx=ox+nx*step,ty=oy+ny*step;const free=(x,y)=>!blockedStatic(x,y,u.r,null)&&!(u===player&&enemies.some(e=>Math.hypot(x-e.x,y-e.y)<u.r+e.r+1));if(free(tx,ty)){u.x=tx;u.y=ty;return}if(free(tx,oy)){u.x=tx;return}if(free(ox,ty)){u.y=ty;return}const sx=-ny,sy=nx;if(free(ox+sx*step*.7,oy+sy*step*.7)){u.x+=sx*step*.7;u.y+=sy*step*.7}}
-function lineBlocked(x1,y1,x2,y2,ignoreBaseId=null){const n=Math.ceil(Math.hypot(x2-x1,y2-y1)/26);for(let i=1;i<n;i++){const t=i/n,x=x1+(x2-x1)*t,y=y1+(y2-y1)*t;for(const o of obstacles){if(o.type==='circle'&&Math.hypot(x-o.x,y-o.y)<o.r)return true;if(o.type==='rect'&&pointRect(x,y,o))return true}if(Math.hypot(x-wreck.x,y-wreck.y)<wreck.r*.65)return true;if(typeof enemyBases!=='undefined')for(const b of enemyBases)if(b.id!==ignoreBaseId&&b.alive&&Math.hypot(x-b.x,y-b.y)<b.r*.66)return true}return false}
+function lineBlocked(x1,y1,x2,y2,ignoreBaseId=null){const n=Math.ceil(Math.hypot(x2-x1,y2-y1)/26);for(let i=1;i<n;i++){const t=i/n,x=x1+(x2-x1)*t,y=y1+(y2-y1)*t;for(const o of obstacles){if(o.type==='circle'&&Math.hypot(x-o.x,y-o.y)<o.r)return true;if(o.type==='rect'&&pointRect(x,y,o))return true}if(Math.hypot(x-wreck.x,y-wreck.y)<wreck.r*.65)return true;if(typeof enemyTitans!=='undefined')for(const b of enemyTitans)if(b.id!==ignoreBaseId&&b.alive&&Math.hypot(x-b.x,y-b.y)<b.r*.66)return true}return false}
 
 // ---------- THREE-STATE FOG: unexplored / remembered / visible ----------
-// V5.2.1: do NOT use a circular spotlight.  Visibility is an obstacle-aware,
-// fine-cell "squircle / tactical window" so the current clear area does not
-// read as one big round halo around the player.
-const FOG_CELL=4, FOG_COLS=Math.ceil(W/FOG_CELL), FOG_ROWS=Math.ceil(H/FOG_CELL);
+// V5.3: restore the organic V5.1 field-of-view shape, but with much finer cells.
+// The edge is world-noise + obstacle clipped, so it reads as irregular fog rather
+// than a round or rectangular spotlight.
+const FOG_CELL=12, FOG_COLS=Math.ceil(W/FOG_CELL), FOG_ROWS=Math.ceil(H/FOG_CELL);
 const fogExplored=new Uint8Array(FOG_COLS*FOG_ROWS), fogVisible=new Uint8Array(FOG_COLS*FOG_ROWS);
 let fogClock=0;
 const fogIdx=(cx,cy)=>cy*FOG_COLS+cx;
-function visionScale(){return terrainAt(player.x,player.y).vision||1}
+function visionRadius(){return 238*(terrainAt(player.x,player.y).vision||1)}
 function fogNoise(cx,cy){const n=Math.sin(cx*12.9898+cy*78.233+stageId*37.71)*43758.5453;return (n-Math.floor(n))*2-1}
 function updateFog(force=false){
-  if(!force&&fogClock>0)return; fogClock=.075; fogVisible.fill(0);
-  const scale=visionScale();
-  // Wider than tall to match the tactical camera, and intentionally NOT radial.
-  const rx=190*scale, ry=142*scale;
-  const pcx=Math.floor(player.x/FOG_CELL), pcy=Math.floor(player.y/FOG_CELL);
-  const cellsX=Math.ceil(rx/FOG_CELL)+3, cellsY=Math.ceil(ry/FOG_CELL)+3;
-  for(let cy=Math.max(0,pcy-cellsY);cy<=Math.min(FOG_ROWS-1,pcy+cellsY);cy++)for(let cx=Math.max(0,pcx-cellsX);cx<=Math.min(FOG_COLS-1,pcx+cellsX);cx++){
-    const x=(cx+.5)*FOG_CELL,y=(cy+.5)*FOG_CELL,dx=Math.abs(x-player.x),dy=Math.abs(y-player.y);
-    // Superellipse (power 4) + fixed world noise makes an organic tactical field,
-    // not a round highlighted circle.  Obstacles carve the shape further.
-    const edge=1+.055*fogNoise(cx,cy);
-    const metric=Math.pow(dx/rx,4)+Math.pow(dy/ry,4);
-    if(metric<=edge && !lineBlocked(player.x,player.y,x,y)){
-      const i=fogIdx(cx,cy);fogVisible[i]=1;fogExplored[i]=1;
-    }
+  if(!force&&fogClock>0)return; fogClock=.085; fogVisible.fill(0);
+  const r=visionRadius(),pcx=Math.floor(player.x/FOG_CELL),pcy=Math.floor(player.y/FOG_CELL),cells=Math.ceil(r/FOG_CELL)+3;
+  for(let cy=Math.max(0,pcy-cells);cy<=Math.min(FOG_ROWS-1,pcy+cells);cy++)for(let cx=Math.max(0,pcx-cells);cx<=Math.min(FOG_COLS-1,pcx+cells);cx++){
+    const x=(cx+.5)*FOG_CELL,y=(cy+.5)*FOG_CELL,dist=Math.hypot(x-player.x,y-player.y);
+    // Two world-fixed noise bands prevent a mathematically perfect circle while
+    // preserving the natural shape that worked well with the larger V5.1 cells.
+    const wobble=.095*fogNoise(cx,cy)+.035*fogNoise(Math.floor(cx/3),Math.floor(cy/3));
+    const edge=r*(1+wobble);
+    if(dist<=edge&&!lineBlocked(player.x,player.y,x,y)){const i=fogIdx(cx,cy);fogVisible[i]=1;fogExplored[i]=1}
   }
-  // The crashed ship is known, but only as a small remembered patch.
-  const rcx=Math.floor(wreck.x/FOG_CELL),rcy=Math.floor(wreck.y/FOG_CELL);
-  const rr=10;
+  // Starting wreck is known only as a compact remembered patch.
+  const rcx=Math.floor(wreck.x/FOG_CELL),rcy=Math.floor(wreck.y/FOG_CELL),rr=5;
   for(let cy=Math.max(0,rcy-rr);cy<=Math.min(FOG_ROWS-1,rcy+rr);cy++)for(let cx=Math.max(0,rcx-rr);cx<=Math.min(FOG_COLS-1,rcx+rr);cx++){
-    if(Math.abs(cx-rcx)+Math.abs(cy-rcy)<=rr*1.35)fogExplored[fogIdx(cx,cy)]=1;
+    if(Math.hypot(cx-rcx,cy-rcy)<=rr+.4)fogExplored[fogIdx(cx,cy)]=1;
   }
 }
 function visibleAt(x,y){const cx=Math.floor(x/FOG_CELL),cy=Math.floor(y/FOG_CELL);return cx>=0&&cy>=0&&cx<FOG_COLS&&cy<FOG_ROWS&&fogVisible[fogIdx(cx,cy)]===1}
@@ -149,14 +142,16 @@ function drawFog(){
   }
   ctx.restore();
 }
-// ---------- BASES / ENEMIES ----------
-const BASE_TYPE={
-  outpost:{hp:210,r:58,tier:1,guard:14,reinforce:24,respawn:13},
-  factory:{hp:300,r:70,tier:2,guard:18,reinforce:32,respawn:12},
-  fortress:{hp:410,r:80,tier:3,guard:23,reinforce:42,respawn:11},
-  command:{hp:560,r:94,tier:4,guard:30,reinforce:54,respawn:10}
+// ---------- GIANT MONSTERS / ENEMIES ----------
+// Former enemy bases are now roaming giant monsters. They are slow, huge and
+// extremely dangerous up close. Their corpses continue to shed lesser enemies.
+const TITAN_TYPE={
+  outpost:{hp:190,r:66,tier:1,speed:25,dmg:32,reach:92,guard:16,reinforce:28,respawn:12,color:'#9b5856',accent:'#f2aa72',name:'균열거수'},
+  factory:{hp:275,r:80,tier:2,speed:21,dmg:40,reach:106,guard:20,reinforce:36,respawn:11,color:'#8d6947',accent:'#eacb72',name:'증식거수'},
+  fortress:{hp:380,r:94,tier:3,speed:17,dmg:49,reach:122,guard:24,reinforce:46,respawn:10,color:'#72556f',accent:'#dda1c7',name:'갑각거수'},
+  command:{hp:540,r:112,tier:4,speed:14,dmg:60,reach:142,guard:30,reinforce:58,respawn:9,color:'#7f3e48',accent:'#ff7070',name:'심연군주'}
 };
-const enemyBases=STAGE.bases.map(s=>{const t=BASE_TYPE[s[2]],hp=Math.round(t.hp*(1+.07*(stageId-1)));return{id:s[0],name:s[1],type:s[2],x:s[3]*W,y:s[4]*H,r:t.r,tier:t.tier,hp,maxHp:hp,alive:true,activated:false,spawnClock:t.respawn,ruinClock:14,hit:0}});
+const enemyTitans=STAGE.bases.map(s=>{const t=TITAN_TYPE[s[2]],hp=Math.round(t.hp*(1+.075*(stageId-1)));return{id:s[0],name:s[1],type:s[2],x:s[3]*W,y:s[4]*H,homeX:s[3]*W,homeY:s[4]*H,r:t.r,tier:t.tier,hp,maxHp:hp,dmg:Math.round(t.dmg*BAL.dmg),speed:t.speed,reach:t.reach,alive:true,activated:false,spawnClock:t.respawn,ruinClock:13,hit:0,attack:rand(.4,1.2),windup:0,slamPending:false,special:rand(2.5,4.5),aim:0,isTitan:true}});
 const exchangeStations=[];if(STAGE.exchange>=1)exchangeStations.push({x:W*.18,y:H*.61,r:46,name:'서부 교환소'});if(STAGE.exchange>=2)exchangeStations.push({x:W*.83,y:H*.58,r:46,name:'동부 교환소'});
 const ET={
   raider:{hp:22,speed:76,r:14,dmg:8,karma:3,color:'#8fab73',attack:'melee'},
@@ -172,14 +167,18 @@ function spawnEnemy(x,y,type='raider',baseId=null,angry=false){
   const t=ET[type],hp=Math.max(8,Math.round(t.hp*BAL.hp)),dmg=Math.max(3,Math.round(t.dmg*BAL.dmg));
   const e={type,x,y,r:t.r,maxHp:hp,hp,speed:t.speed*(1+.025*(stageId-1)),dmg,karma:Math.max(1,Math.round(t.karma*BAL.karma)),color:t.color,baseId,angry,attack:rand(0,.4),shot:rand(.2,.8),windup:0,hit:0};enemies.push(e);return e
 }
-function spawnAroundBase(b,count,angry=false){
+function spawnAroundTitan(titan,count,angry=false){
   const room=Math.max(0,enemyCap()-enemies.length),actual=Math.min(count,room);if(actual<=0)return;
-  for(let i=0;i<actual;i++){const a=Math.PI*2*i/actual+rand(-.18,.18),r=b.r+72+rand(0,125),x=b.x+Math.cos(a)*r,y=b.y+Math.sin(a)*r;if(!blockedStatic(x,y,14,b.id))spawnEnemy(x,y,enemyKind(b.tier),b.id,angry)}
+  for(let i=0;i<actual;i++){const a=Math.PI*2*i/actual+rand(-.22,.22),rr=titan.r+82+rand(0,145),x=titan.x+Math.cos(a)*rr,y=titan.y+Math.sin(a)*rr;if(!blockedStatic(x,y,14,titan.id))spawnEnemy(x,y,enemyKind(titan.tier),titan.id,angry)}
 }
-function nonCommandAlive(){return enemyBases.filter(b=>b.alive&&b.type!=='command').length}
-function damageBase(b,dmg){if(!b.alive)return;if(b.type==='command'&&nonCommandAlive()>0){if(b.hit<=0)event('지휘기지 보호막 · 다른 거점을 먼저 파괴하세요.',1.5);b.hit=.2;return}b.hp-=dmg;b.hit=.14;if(b.hp<=0){b.hp=0;b.alive=false;destroyedBases++;runKarma+=70+b.tier*45;sfx('boom');event(`${b.name} 파괴! 잔존 병력이 쏟아집니다`,2.5);spawnAroundBase(b,Math.round(BASE_TYPE[b.type].reinforce*(1+.12*(stageId-1))),true);saveSnapshot();if(b.type==='command'){finalDestroyed=true;finalHold=10;event('지휘기지 붕괴 · 10초만 버티세요!',2.5)}}}
-
-function nearestTarget(u,range){let best=null,bd=range;for(const e of enemies){if(!visibleAt(e.x,e.y))continue;const dd=d(u,e);if(dd<bd&&!lineBlocked(u.x,u.y,e.x,e.y)){best=e;bd=dd}}if(!best){for(const b of enemyBases){if(!b.alive||!visibleAt(b.x,b.y))continue;const dd=d(u,b)-b.r;if(dd<bd&&!lineBlocked(u.x,u.y,b.x,b.y,b.id)){best=b;bd=dd}}}return best}
+function nonAlphaAlive(){return enemyTitans.filter(t=>t.alive&&t.type!=='command').length}
+function damageTitan(t,dmg){
+  if(!t.alive)return;
+  if(t.type==='command'&&nonAlphaAlive()>0){if(t.hit<=0)event('심연군주는 다른 대형 괴수가 살아 있는 동안 피해를 받지 않습니다.',1.6);t.hit=.2;return}
+  t.hp-=dmg;t.hit=.14;
+  if(t.hp<=0){t.hp=0;t.alive=false;defeatedTitans++;runKarma+=90+t.tier*60;sfx('boom');event(`${t.name} 격파! 사체에서 잔존 개체가 쏟아집니다`,2.6);spawnAroundTitan(t,Math.round(TITAN_TYPE[t.type].reinforce*(1+.12*(stageId-1))),true);saveSnapshot();if(t.type==='command'){finalDestroyed=true;finalHold=10;event('심연군주 격파 · 잔존 개체를 10초만 버티세요!',2.7)}}
+}
+function nearestTarget(u,range){let best=null,bd=range;for(const e of enemies){if(!visibleAt(e.x,e.y))continue;const dd=d(u,e);if(dd<bd&&!lineBlocked(u.x,u.y,e.x,e.y)){best=e;bd=dd}}if(!best){for(const t of enemyTitans){if(!t.alive||!visibleAt(t.x,t.y))continue;const dd=d(u,t)-t.r;if(dd<bd&&!lineBlocked(u.x,u.y,t.x,t.y,t.id)){best=t;bd=dd}}}return best}
 
 // ---------- AUDIO ----------
 function ensureAudio(){if(audioCtx)return;try{audioCtx=new(window.AudioContext||window.webkitAudioContext)()}catch{}}
@@ -194,7 +193,7 @@ function effectiveSpeed(){return runStats.speed*(stimOn()?2:1)}
 function fireRate(){return stimOn()?.5:1}
 function tracer(x1,y1,x2,y2,color='#ffe59c',life=.10){tracers.push({x1,y1,x2,y2,color,life,max:life})}
 function hitEnemy(e,dmg,from){e.hp-=dmg;e.hit=.09;const dx=e.x-from.x,dy=e.y-from.y,l=Math.hypot(dx,dy)||1;const nx=e.x+dx/l*4,ny=e.y+dy/l*4;if(!blockedStatic(nx,ny,e.r,e.baseId)){e.x=nx;e.y=ny}sfx('hit');floating.push({x:e.x,y:e.y-20,text:`-${Math.round(dmg)}`,life:.55,color:'#ffe3a0'});if(e.hp<=0){kills++;runKarma+=e.karma;sfx('kill');corpses.push({x:e.x,y:e.y,r:e.r,life:.8,color:e.color});enemies.splice(enemies.indexOf(e),1)}}
-function fireRifle(u,target,damage){const a=Math.atan2(target.y-u.y,target.x-u.x);u.aim=a;u.recoil=.08;u.muzzle=.06;const px=u.x+Math.cos(a)*19,py=u.y+Math.sin(a)*19,tx=target.x+rand(-3,3),ty=target.y+rand(-3,3);tracer(px,py,tx,ty,'#ffe2a0');sfx('shot');if(target.maxHp&&target.type&&ET[target.type])hitEnemy(target,damage,u);else if(target.alive!==undefined)damageBase(target,damage)}
+function fireRifle(u,target,damage){const a=Math.atan2(target.y-u.y,target.x-u.x);u.aim=a;u.recoil=.08;u.muzzle=.06;const px=u.x+Math.cos(a)*19,py=u.y+Math.sin(a)*19,tx=target.x+rand(-3,3),ty=target.y+rand(-3,3);tracer(px,py,tx,ty,'#ffe2a0');sfx('shot');if(target.maxHp&&target.type&&ET[target.type])hitEnemy(target,damage,u);else if(target.alive!==undefined)damageTitan(target,damage)}
 function updateShooter(u,dt){u.fireClock=Math.max(0,(u.fireClock||0)-dt);u.burstClock=Math.max(0,(u.burstClock||0)-dt);u.recoil=Math.max(0,(u.recoil||0)-dt);u.muzzle=Math.max(0,(u.muzzle||0)-dt);const range=350*(terrainAt(u.x,u.y).high?1.12:1),target=nearestTarget(u,range);if(!target){u.burstShots=0;return}if(u.fireClock<=0&&u.burstShots<=0){u.burstShots=3;u.burstClock=0}if(u.burstShots>0&&u.burstClock<=0){fireRifle(u,target,effectiveAttack());u.burstShots--;u.burstClock=.105*fireRate();if(u.burstShots<=0)u.fireClock=.50*fireRate()}}
 function hurtPlayer(raw){const dmg=Math.max(1,Math.round(raw-effectiveDefense()));player.hp-=dmg;player.hit=.14;floating.push({x:player.x,y:player.y-24,text:`-${dmg}`,life:.5,color:'#ff9a8f'});if(player.hp<=0)endRun(false,'전투 불능')}
 function enemyShoot(e,target,type='bullet'){const td=d(e,target),spd=type==='spit'?250:390;enemyBullets.push({type,x:e.x,y:e.y,vx:(target.x-e.x)/(td||1)*spd,vy:(target.y-e.y)/(td||1)*spd,life:type==='spit'?1.8:1.3,dmg:e.dmg,r:type==='spit'?6:3,blast:type==='spit'?38:0});tone(type==='spit'?120:95,.05,.018,type==='spit'?'sawtooth':'square')}
@@ -202,7 +201,7 @@ function resolveEnemySeparation(){for(let i=0;i<enemies.length;i++){const a=enem
 function updateEnemies(dt){
   for(const e of [...enemies]){
     e.hit=Math.max(0,e.hit-dt);e.attack=Math.max(0,e.attack-dt);e.shot=Math.max(0,e.shot-dt);e.windup=Math.max(0,e.windup-dt);
-    const owner=enemyBases.find(b=>b.id===e.baseId),td=d(e,player);
+    const owner=enemyTitans.find(b=>b.id===e.baseId),td=d(e,player);
     const playerSafe=d(player,wreck)<wreck.r+105;
     if(playerSafe){const hd=d(e,wreck);if(hd<wreck.r+175){move(e,(e.x-wreck.x)/(hd||1),(e.y-wreck.y)/(hd||1),e.speed*.8,dt)}continue}
     const shouldChase=e.angry||td<620||(!owner||!owner.alive&&td<760);
@@ -221,30 +220,64 @@ function updateEnemies(dt){
   }
   resolveEnemySeparation();
   for(const b of enemyBullets){b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;if(b.life>0&&Math.hypot(b.x-player.x,b.y-player.y)<player.r+b.r){if(b.blast){hurtPlayer(b.dmg);for(const e of enemies){} }else hurtPlayer(b.dmg);b.life=0}}
-  enemyBullets=enemyBullets.filter(b=>b.life>0&&!blockedStatic(b.x,b.y,b.r||2,null,false));
+  enemyBullets=enemyBullets.filter(b=>b.life>0&&!blockedStatic(b.x,b.y,b.r||2,b.sourceTitanId||null,false));
 }
 function hordeProgress(){return clamp(gameTime/GAME_LENGTH,0,1)}
 function hordeInterval(){const p=hordeProgress();return BAL.hordeStart+(BAL.hordeEnd-BAL.hordeStart)*p}
 function spawnGlobalHorde(){
   if(enemies.length>=enemyCap())return;
-  const sources=enemyBases.slice().sort((a,b)=>d(player,a)-d(player,b));if(!sources.length)return;
+  const sources=enemyTitans.slice().sort((a,b)=>d(player,a)-d(player,b));if(!sources.length)return;
   const source=sources[0],p=hordeProgress();
   const count=Math.round(BAL.hordeBase+BAL.hordeGrowth*p+source.tier*1.3);
-  spawnAroundBase(source,count,true);
-  if(p>.48&&Math.random()<.45&&sources[1])spawnAroundBase(sources[1],Math.round(count*.45),true);
+  spawnAroundTitan(source,count,true);
+  if(p>.48&&Math.random()<.45&&sources[1])spawnAroundTitan(sources[1],Math.round(count*.45),true);
 }
-function updateBases(dt){
-  const p=hordeProgress();
-  for(const b of enemyBases){
-    b.hit=Math.max(0,b.hit-dt);const dd=d(player,b);
-    if(b.alive){
-      if(dd<700&&!b.activated){b.activated=true;spawnAroundBase(b,BASE_TYPE[b.type].guard+stageId*2,false);event(`${b.name} 경계 병력 활성화`,1.5)}
-      if(b.activated&&dd<1050){b.spawnClock-=dt;if(b.spawnClock<=0){b.spawnClock=BASE_TYPE[b.type].respawn*(1-.38*p);const n=Math.round((3+b.tier*1.8+stageId*.7)*(1+1.45*p));spawnAroundBase(b,n,false)}}
-    }else if(dd<950){b.ruinClock-=dt;if(b.ruinClock<=0){b.ruinClock=(14-rand(0,3))*(1-.28*p);spawnAroundBase(b,Math.round((3+b.tier)*(1+.9*p)),false)}}
+function titanMove(t,nx,ny,speed,dt){
+  const step=speed*dt,ox=t.x,oy=t.y,tx=ox+nx*step,ty=oy+ny*step;
+  const free=(x,y)=>!blockedStatic(x,y,t.r*.68,t.id)&&Math.hypot(x-wreck.x,y-wreck.y)>wreck.r+145;
+  if(free(tx,ty)){t.x=tx;t.y=ty;return}if(free(tx,oy)){t.x=tx;return}if(free(ox,ty)){t.y=ty;return}
+}
+function titanShock(t,wide=false){
+  particles.push({type:'ring',x:t.x,y:t.y,r:t.r*.72,maxR:wide?t.reach*1.35:t.reach,life:.48,max:.48,color:TITAN_TYPE[t.type].accent});
+  const td=d(t,player),limit=wide?t.reach*1.30:t.reach;
+  if(td<=limit+player.r&&!lineBlocked(t.x,t.y,player.x,player.y,t.id)){
+    hurtPlayer(wide?Math.round(t.dmg*.72):t.dmg);
+    const dx=player.x-t.x,dy=player.y-t.y,l=Math.hypot(dx,dy)||1,push=wide?46:32;
+    const nx=player.x+dx/l*push,ny=player.y+dy/l*push;if(!blockedStatic(nx,ny,player.r)) {player.x=nx;player.y=ny}
+  }
+}
+function titanVolley(t){
+  const base=Math.atan2(player.y-t.y,player.x-t.x),count=t.tier>=4?7:t.tier>=3?5:3,spread=.52;
+  for(let i=0;i<count;i++){const a=base+(i-(count-1)/2)*(spread/Math.max(1,count-1)),spd=210+18*t.tier;enemyBullets.push({type:'spit',x:t.x+Math.cos(a)*t.r*.7,y:t.y+Math.sin(a)*t.r*.7,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,life:2.0,dmg:Math.max(10,Math.round(t.dmg*.48)),r:7,blast:42,sourceTitanId:t.id})}
+  tone(70,.16,.045,'sawtooth')
+}
+function updateTitans(dt){
+  const p=hordeProgress(),playerSafe=d(player,wreck)<wreck.r+110;
+  for(const t of enemyTitans){
+    t.hit=Math.max(0,t.hit-dt);t.attack=Math.max(0,t.attack-dt);t.special=Math.max(0,t.special-dt);
+    const td=d(player,t),homeD=Math.hypot(t.x-t.homeX,t.y-t.homeY),locked=t.type==='command'&&nonAlphaAlive()>0;
+    if(t.alive){
+      if(!locked&&td<780&&!t.activated){t.activated=true;spawnAroundTitan(t,TITAN_TYPE[t.type].guard+stageId*2,false);event(`${t.name} 출현 · 근접 공격에 주의하세요!`,1.8)}
+      if(t.activated&&!locked){
+        // Continually shed lesser creatures while engaged.
+        if(td<1150){t.spawnClock-=dt;if(t.spawnClock<=0){t.spawnClock=TITAN_TYPE[t.type].respawn*(1-.38*p);const n=Math.round((4+t.tier*2+stageId*.7)*(1+1.45*p));spawnAroundTitan(t,n,false)}}
+        // Slow pursuit, but do not enter the safe wreck zone and do not roam forever.
+        if(playerSafe||homeD>430){const hx=t.homeX-t.x,hy=t.homeY-t.y,hl=Math.hypot(hx,hy)||1;titanMove(t,hx/hl,hy/hl,t.speed*.92,dt)}
+        else if(td>t.reach*.78&&td<900){const dx=player.x-t.x,dy=player.y-t.y,l=Math.hypot(dx,dy)||1;t.aim=Math.atan2(dy,dx);titanMove(t,dx/l,dy/l,t.speed,dt)}
+        // Telegraph a devastating melee slam instead of contact damage.
+        if(t.windup>0){const before=t.windup;t.windup=Math.max(0,t.windup-dt);if(before>0&&t.windup===0&&t.slamPending){t.slamPending=false;titanShock(t,false)}}
+        else if(!playerSafe&&td<=t.reach+player.r+18&&t.attack<=0){t.attack=2.25+.25*t.tier;t.windup=.68;t.slamPending=true;t.aim=Math.atan2(player.y-t.y,player.x-t.x)}
+        // Larger tiers occasionally fire a slow, highly visible shock volley.
+        if(t.tier>=2&&!playerSafe&&td<620&&t.special<=0){t.special=5.4-.35*t.tier+rand(.2,1.0);titanVolley(t)}
+      }else if(locked&&t.activated){t.activated=false}
+    }else if(td<1000){
+      // The carcass remains a weaker source of swarming enemies.
+      t.ruinClock-=dt;if(t.ruinClock<=0){t.ruinClock=(13-rand(0,3))*(1-.25*p);spawnAroundTitan(t,Math.round((3+t.tier)*(1+.8*p)),false)}
+    }
   }
   hordeClock-=dt;
   if(hordeClock<=0){spawnGlobalHorde();hordeClock=hordeInterval()*rand(.86,1.12)}
-  const level=Math.min(5,1+Math.floor(gameTime/120));if(level>lastSurgeLevel){lastSurgeLevel=level;event(`적 증식 단계 ${level} · 병력 밀도가 상승합니다.`,2)}
+  const level=Math.min(5,1+Math.floor(gameTime/120));if(level>lastSurgeLevel){lastSurgeLevel=level;event(`적 증식 단계 ${level} · 군집 밀도가 상승합니다.`,2)}
 }
 // ---------- SKILLS / ECONOMY ----------
 function nearExchange(){if(d(player,wreck)<wreck.r+95)return{name:'추락선 잔해'};for(const s of exchangeStations)if(d(player,s)<s.r+40)return s;return null}
@@ -277,8 +310,8 @@ function openMenu(){if(ended)return;paused=true;$('#battleMenu').classList.remov
 function closeMenu(){if(ended)return;$('#battleMenu').classList.add('hidden');paused=false;last=performance.now()}
 
 // ---------- SAVE ----------
-function saveSnapshot(){if(ended)return;saveRun({stageId,gameTime,runKarma,credits,kills,runStats:{...runStats},player:{x:player.x,y:player.y,hp:player.hp},enemyBases:enemyBases.map(b=>({id:b.id,hp:b.hp,alive:b.alive,activated:b.activated,spawnClock:b.spawnClock,ruinClock:b.ruinClock})),enemies:enemies.slice(0,enemyCap()).map(e=>({type:e.type,x:e.x,y:e.y,hp:e.hp,baseId:e.baseId,angry:e.angry})),stimRemaining,hordeClock,lastSurgeLevel,fogCell:FOG_CELL,fogExplored:serializeFog(),finalDestroyed,finalHold,ended:false})}
-function restore(s){if(!s||Number(s.stageId)!==stageId)return false;gameTime=s.gameTime||0;runKarma=s.runKarma||0;credits=s.credits||0;kills=s.kills||0;Object.assign(runStats,s.runStats||{});if(s.player){player.x=s.player.x;player.y=s.player.y;player.hp=s.player.hp}for(const sb of s.enemyBases||[]){const b=enemyBases.find(x=>x.id===sb.id);if(b)Object.assign(b,sb)}destroyedBases=enemyBases.filter(b=>!b.alive).length;enemies=[];for(const se of s.enemies||[]){const e=spawnEnemy(se.x,se.y,se.type,se.baseId,se.angry);if(e)e.hp=Math.min(e.maxHp,se.hp)}stimRemaining=s.stimRemaining||0;hordeClock=Number(s.hordeClock)||hordeClock;lastSurgeLevel=Number(s.lastSurgeLevel)||Math.min(5,1+Math.floor(gameTime/120));restoreFog(s.fogExplored||[],Number(s.fogCell)||28);finalDestroyed=!!s.finalDestroyed;finalHold=s.finalHold||0;return true}
+function saveSnapshot(){if(ended)return;saveRun({stageId,gameTime,runKarma,credits,kills,runStats:{...runStats},player:{x:player.x,y:player.y,hp:player.hp},enemyTitans:enemyTitans.map(t=>({id:t.id,x:t.x,y:t.y,hp:t.hp,alive:t.alive,activated:t.activated,spawnClock:t.spawnClock,ruinClock:t.ruinClock,attack:t.attack,windup:t.windup,special:t.special,aim:t.aim})),enemies:enemies.slice(0,enemyCap()).map(e=>({type:e.type,x:e.x,y:e.y,hp:e.hp,baseId:e.baseId,angry:e.angry})),stimRemaining,hordeClock,lastSurgeLevel,fogCell:FOG_CELL,fogExplored:serializeFog(),finalDestroyed,finalHold,ended:false})}
+function restore(s){if(!s||Number(s.stageId)!==stageId)return false;gameTime=s.gameTime||0;runKarma=s.runKarma||0;credits=s.credits||0;kills=s.kills||0;Object.assign(runStats,s.runStats||{});if(s.player){player.x=s.player.x;player.y=s.player.y;player.hp=s.player.hp}const savedTitans=s.enemyTitans||s.enemyBases||[];for(const st of savedTitans){const t=enemyTitans.find(x=>x.id===st.id);if(t)Object.assign(t,st)}defeatedTitans=enemyTitans.filter(t=>!t.alive).length;enemies=[];for(const se of s.enemies||[]){const e=spawnEnemy(se.x,se.y,se.type,se.baseId,se.angry);if(e)e.hp=Math.min(e.maxHp,se.hp)}stimRemaining=s.stimRemaining||0;hordeClock=Number(s.hordeClock)||hordeClock;lastSurgeLevel=Number(s.lastSurgeLevel)||Math.min(5,1+Math.floor(gameTime/120));restoreFog(s.fogExplored||[],Number(s.fogCell)||28);finalDestroyed=!!s.finalDestroyed;finalHold=s.finalHold||0;return true}
 
 // ---------- UPDATE ----------
 const joy={x:0,y:0};
@@ -286,11 +319,11 @@ function update(dt){if(paused||ended)return;gameTime+=dt;autosaveClock+=dt;stimR
   let dx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+joy.x,dy=(keys.KeyS||keys.ArrowDown?1:0)-(keys.KeyW||keys.ArrowUp?1:0)+joy.y,l=Math.hypot(dx,dy);if(l>0){dx/=l;dy/=l;move(player,dx,dy,effectiveSpeed(),dt)}
   // Season 1 start point is a wreck, not a base. It cannot be attacked. Nearby it repairs HP and exchanges karma.
   if(d(player,wreck)<wreck.r+105)player.hp=Math.min(player.maxHp,player.hp+28*dt);
-  updateShooter(player,dt);updateBases(dt);updateEnemies(dt);
-  for(const t of tracers)t.life-=dt;tracers=tracers.filter(t=>t.life>0);for(const c of corpses)c.life-=dt;corpses=corpses.filter(c=>c.life>0);for(const f of floating){f.life-=dt;f.y-=20*dt}floating=floating.filter(f=>f.life>0);
+  updateShooter(player,dt);updateTitans(dt);updateEnemies(dt);
+  for(const t of tracers)t.life-=dt;tracers=tracers.filter(t=>t.life>0);for(const p of particles){p.life-=dt;if(p.type==='ring'){const q=1-p.life/p.max;p.drawR=p.r+(p.maxR-p.r)*q}}particles=particles.filter(p=>p.life>0);for(const c of corpses)c.life-=dt;corpses=corpses.filter(t=>t.life>0);for(const f of floating){f.life-=dt;f.y-=20*dt}floating=floating.filter(f=>f.life>0);
   updateFog();cam.x+=(player.x-cam.x)*Math.min(1,dt*7);cam.y+=(player.y-cam.y)*Math.min(1,dt*7);cam.x=clamp(cam.x,canvas.width/2,W-canvas.width/2);cam.y=clamp(cam.y,canvas.height/2,H-canvas.height/2);
   const tr=terrainAt(player.x,player.y);if(tr.name!==lastTerrain){lastTerrain=tr.name;if(tr.name){$('#terrainHint').textContent=tr.name;$('#terrainHint').classList.remove('hidden');terrainClock=1.8}}if(terrainClock<=0)$('#terrainHint').classList.add('hidden');
-  if(finalDestroyed){finalHold-=dt;if(finalHold<=0)endRun(true,'지휘망을 파괴하고 잔존 병력을 견뎌냈습니다.')}else if(gameTime>=GAME_LENGTH)endRun(false,'작전 제한시간을 초과했습니다.');
+  if(finalDestroyed){finalHold-=dt;if(finalHold<=0)endRun(true,'심연군주를 격파하고 잔존 개체를 견뎌냈습니다.')}else if(gameTime>=GAME_LENGTH)endRun(false,'작전 제한시간을 초과했습니다.');
   if(autosaveClock>10){autosaveClock=0;saveSnapshot()}
 }
 
@@ -305,10 +338,40 @@ function drawTerrain(){ctx.fillStyle='#36513b';ctx.fillRect(0,0,canvas.width,can
   ctx.restore();
 }
 function drawHome(){ctx.save();ctx.translate(sx(wreck.x),sy(wreck.y));ctx.fillStyle='#202a28';ctx.beginPath();ctx.ellipse(0,8,76,54,-.18,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#68736c';ctx.lineWidth=5;ctx.stroke();ctx.fillStyle='#879995';ctx.save();ctx.rotate(-.20);ctx.fillRect(-55,-22,110,44);ctx.fillStyle='#2c3937';ctx.fillRect(-16,-33,54,18);ctx.fillStyle='#cf714f';ctx.fillRect(28,-16,28,32);ctx.restore();ctx.fillStyle='#d9ef71';ctx.fillRect(-7,-48,14,14);ctx.fillStyle='#e7eee8';ctx.font='800 14px system-ui, sans-serif';ctx.textAlign='center';ctx.fillText('추락선 · 회복 / 카르마 교환',0,wreck.r+35);ctx.restore()}
-function drawBase(b){if(!visibleAt(b.x,b.y)&&!exploredAt(b.x,b.y))return;ctx.save();ctx.translate(sx(b.x),sy(b.y));if(!b.alive){ctx.fillStyle='#272d29';ctx.fillRect(-b.r*.65,-b.r*.35,b.r*1.3,b.r*.7);ctx.fillStyle='#686a64';ctx.fillRect(-b.r*.45,-b.r*.15,b.r*.9,b.r*.25);ctx.fillStyle='#b7b7ae';ctx.font='700 11px Malgun Gothic';ctx.textAlign='center';ctx.fillText('잔존 소굴',0,b.r*.65);ctx.restore();return}const colors={outpost:'#a95050',factory:'#bc6c4c',fortress:'#875c72',command:'#ce424a'};ctx.fillStyle=colors[b.type];ctx.fillRect(-b.r*.72,-b.r*.55,b.r*1.44,b.r*1.10);ctx.fillStyle='#2a2e2a';ctx.fillRect(-b.r*.3,-b.r*.30,b.r*.6,b.r*.62);if(b.type==='command'&&nonCommandAlive()>0){ctx.strokeStyle='#7fd9ff';ctx.lineWidth=5;ctx.beginPath();ctx.arc(0,0,b.r+10,0,Math.PI*2);ctx.stroke()}ctx.fillStyle='#111';ctx.fillRect(-b.r,-b.r-.22*b.r,b.r*2,8);ctx.fillStyle='#e8d06d';ctx.fillRect(-b.r,-b.r-.22*b.r,b.r*2*(b.hp/b.maxHp),8);ctx.fillStyle='#f3e4df';ctx.font='800 12px Malgun Gothic';ctx.textAlign='center';ctx.fillText(b.name,0,b.r+22);ctx.restore()}
+function drawTitan(t){
+  // Moving giant monsters are units: outside current vision they disappear.
+  // The remembered terrain beneath them remains fixed by the fog layer.
+  if(!visibleAt(t.x,t.y))return;
+  const spec=TITAN_TYPE[t.type],pulse=.5+.5*Math.sin(gameTime*2.4+t.tier);
+  ctx.save();ctx.translate(sx(t.x),sy(t.y));
+  if(!t.alive){
+    ctx.rotate(-.18);ctx.fillStyle='#242522';ctx.beginPath();ctx.ellipse(0,8,t.r*.88,t.r*.46,0,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#5e5d56';ctx.lineWidth=7;for(let i=0;i<5;i++){const a=-1.9+i*.75;ctx.beginPath();ctx.moveTo(Math.cos(a)*t.r*.28,Math.sin(a)*t.r*.20);ctx.lineTo(Math.cos(a)*t.r*.92,Math.sin(a)*t.r*.58);ctx.stroke()}
+    ctx.restore();ctx.fillStyle='#aaa99e';ctx.font='800 12px Malgun Gothic';ctx.textAlign='center';ctx.fillText('거수 사체 · 잔존 개체 발생',sx(t.x),sy(t.y)+t.r*.72);return
+  }
+  ctx.rotate(t.aim||0);
+  // Rear limbs / tentacles.
+  ctx.strokeStyle=spec.color;ctx.lineWidth=Math.max(10,t.r*.16);ctx.lineCap='round';
+  for(let i=0;i<4;i++){const a=-2.3+i*1.52,ex=Math.cos(a)*t.r*.92,ey=Math.sin(a)*t.r*.68;ctx.beginPath();ctx.moveTo(-t.r*.12,0);ctx.quadraticCurveTo(ex*.62,ey*.45,ex,ey);ctx.stroke()}
+  // Main organic body.
+  ctx.fillStyle=t.hit>0?'#fff':spec.color;ctx.beginPath();ctx.ellipse(0,0,t.r*.72,t.r*.58,0,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#251d1e';ctx.lineWidth=Math.max(5,t.r*.07);ctx.stroke();
+  // Armoured crown/spines.
+  ctx.fillStyle='#2a2527';for(let i=-2;i<=2;i++){const x=-t.r*.12+i*t.r*.19;ctx.beginPath();ctx.moveTo(x,-t.r*.42);ctx.lineTo(x+t.r*.10,-t.r*.78);ctx.lineTo(x+t.r*.18,-t.r*.40);ctx.closePath();ctx.fill()}
+  // Eye/core and mouth.
+  ctx.fillStyle=spec.accent;ctx.beginPath();ctx.arc(t.r*.28,-t.r*.10,t.r*(.09+.025*pulse),0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#171414';ctx.fillRect(t.r*.30,t.r*.12,t.r*.34,t.r*.12);
+  if(t.windup>0){ctx.strokeStyle='#ff785f';ctx.lineWidth=5;ctx.globalAlpha=.55+.35*pulse;ctx.beginPath();ctx.arc(0,0,t.reach*(.72+.10*pulse),0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1}
+  ctx.restore();
+  // Boss bar and name stay upright.
+  const x=sx(t.x),y=sy(t.y);ctx.fillStyle='#090b0a';ctx.fillRect(x-t.r,y-t.r-.32*t.r,t.r*2,10);ctx.fillStyle=spec.accent;ctx.fillRect(x-t.r,y-t.r-.32*t.r,t.r*2*(t.hp/t.maxHp),10);
+  if(t.type==='command'&&nonAlphaAlive()>0){ctx.strokeStyle='#7fd9ff';ctx.lineWidth=4;ctx.beginPath();ctx.arc(x,y,t.r+12,0,Math.PI*2);ctx.stroke()}
+  ctx.fillStyle='#fff2e8';ctx.font=`900 ${Math.max(13,11+t.tier)}px Malgun Gothic`;ctx.textAlign='center';ctx.fillText(t.name,x,y+t.r*.78);
+}
 function drawUnit(u,playerUnit=false){if(!playerUnit&&!visibleAt(u.x,u.y))return;ctx.save();ctx.translate(sx(u.x),sy(u.y));ctx.rotate(u.aim||0);if(u.hit>0)ctx.fillStyle='#fff';else ctx.fillStyle=playerUnit?'#83cfe5':u.type==='flame'?'#e28b5a':'#b7d4c0';ctx.fillRect(-12,-10,24,20);ctx.fillStyle='#26352e';ctx.fillRect(4,-4,22,8);if(u.muzzle>0){ctx.fillStyle='#ffe26d';ctx.beginPath();ctx.moveTo(27,0);ctx.lineTo(39,-7);ctx.lineTo(38,7);ctx.closePath();ctx.fill()}ctx.restore();if(!playerUnit&&u.hp<u.maxHp){ctx.fillStyle='#111';ctx.fillRect(sx(u.x)-16,sy(u.y)-21,32,4);ctx.fillStyle='#6fda82';ctx.fillRect(sx(u.x)-16,sy(u.y)-21,32*(u.hp/u.maxHp),4)}}
 function drawEnemy(e){if(!visibleAt(e.x,e.y))return;ctx.save();ctx.translate(sx(e.x),sy(e.y));if(e.windup>0){ctx.strokeStyle=e.type==='brute'?'#ff9a6a':'#e8cf76';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,e.r+8,0,Math.PI*2);ctx.stroke()}ctx.fillStyle=e.hit>0?'#fff':e.color;ctx.beginPath();ctx.arc(0,0,e.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#202c25';ctx.lineWidth=4;ctx.stroke();if(e.type==='gunner'){ctx.strokeStyle='#2e3530';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(e.r+10,0);ctx.stroke()}else if(e.type==='spitter'){ctx.fillStyle='#a8efe0';ctx.beginPath();ctx.arc(e.r*.3,-e.r*.25,4,0,Math.PI*2);ctx.fill()}ctx.restore()}
-function drawWorld(){drawTerrain();drawHome();for(const s of exchangeStations)if(exploredAt(s.x,s.y)){ctx.save();ctx.translate(sx(s.x),sy(s.y));ctx.fillStyle='#67bfd0';ctx.beginPath();ctx.arc(0,0,s.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#0e2b31';ctx.fillRect(-20,-18,40,36);ctx.fillStyle='#d4f7ff';ctx.font='700 11px Malgun Gothic';ctx.textAlign='center';ctx.fillText('교환소',0,s.r+18);ctx.restore()}for(const b of enemyBases)drawBase(b);for(const c of corpses)if(visibleAt(c.x,c.y)){ctx.globalAlpha=c.life/.8;ctx.fillStyle=c.color;ctx.fillRect(sx(c.x)-c.r,sy(c.y)-5,c.r*2,10);ctx.globalAlpha=1}for(const e of enemies)drawEnemy(e);drawUnit(player,true);for(const b of enemyBullets)if(visibleAt(b.x,b.y)){ctx.fillStyle=b.type==='spit'?'#7fe0cd':'#ff7a65';ctx.beginPath();ctx.arc(sx(b.x),sy(b.y),b.r||3,0,Math.PI*2);ctx.fill();if(b.type==='spit'){ctx.strokeStyle='#baffef';ctx.lineWidth=2;ctx.stroke()}}for(const t of tracers){if(!visibleAt(t.x2,t.y2))continue;ctx.globalAlpha=t.life/t.max;ctx.strokeStyle=t.color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(sx(t.x1),sy(t.y1));ctx.lineTo(sx(t.x2),sy(t.y2));ctx.stroke();ctx.globalAlpha=1}ctx.font='800 12px Malgun Gothic';ctx.textAlign='center';for(const f of floating)if(visibleAt(f.x,f.y)){ctx.globalAlpha=Math.min(1,f.life*3);ctx.fillStyle=f.color;ctx.fillText(f.text,sx(f.x),sy(f.y));ctx.globalAlpha=1}drawFog()}
+function drawParticles(){for(const p of particles){if(!visibleAt(p.x,p.y))continue;if(p.type==='ring'){ctx.save();ctx.globalAlpha=Math.max(0,p.life/p.max);ctx.strokeStyle=p.color;ctx.lineWidth=5;ctx.beginPath();ctx.arc(sx(p.x),sy(p.y),p.drawR||p.r,0,Math.PI*2);ctx.stroke();ctx.restore()}}}
+function drawWorld(){drawTerrain();drawHome();for(const s of exchangeStations)if(exploredAt(s.x,s.y)){ctx.save();ctx.translate(sx(s.x),sy(s.y));ctx.fillStyle='#67bfd0';ctx.beginPath();ctx.arc(0,0,s.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#0e2b31';ctx.fillRect(-20,-18,40,36);ctx.fillStyle='#d4f7ff';ctx.font='700 11px Malgun Gothic';ctx.textAlign='center';ctx.fillText('교환소',0,s.r+18);ctx.restore()}for(const b of enemyTitans)drawTitan(b);for(const c of corpses)if(visibleAt(c.x,c.y)){ctx.globalAlpha=c.life/.8;ctx.fillStyle=c.color;ctx.fillRect(sx(c.x)-c.r,sy(c.y)-5,c.r*2,10);ctx.globalAlpha=1}for(const e of enemies)drawEnemy(e);drawUnit(player,true);for(const b of enemyBullets)if(visibleAt(b.x,b.y)){ctx.fillStyle=b.type==='spit'?'#7fe0cd':'#ff7a65';ctx.beginPath();ctx.arc(sx(b.x),sy(b.y),b.r||3,0,Math.PI*2);ctx.fill();if(b.type==='spit'){ctx.strokeStyle='#baffef';ctx.lineWidth=2;ctx.stroke()}}for(const t of tracers){if(!visibleAt(t.x2,t.y2))continue;ctx.globalAlpha=t.life/t.max;ctx.strokeStyle=t.color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(sx(t.x1),sy(t.y1));ctx.lineTo(sx(t.x2),sy(t.y2));ctx.stroke();ctx.globalAlpha=1}ctx.font='800 12px Malgun Gothic';ctx.textAlign='center';for(const f of floating)if(visibleAt(f.x,f.y)){ctx.globalAlpha=Math.min(1,f.life*3);ctx.fillStyle=f.color;ctx.fillText(f.text,sx(f.x),sy(f.y));ctx.globalAlpha=1}drawParticles();drawFog()}
 function drawMinimap(){
   const mw=minimap.width,mh=minimap.height,mx=x=>x/W*mw,my=y=>y/H*mh;
   mctx.fillStyle='#344e3a';mctx.fillRect(0,0,mw,mh);
@@ -323,11 +386,11 @@ function drawMinimap(){
     const wx=(px+.5)/mw*W,wy=(py+.5)/mh*H,cx=Math.floor(wx/FOG_CELL),cy=Math.floor(wy/FOG_CELL),i=fogIdx(clamp(cx,0,FOG_COLS-1),clamp(cy,0,FOG_ROWS-1));
     if(fogVisible[i])continue;mctx.fillStyle=fogExplored[i]?'rgba(5,8,7,.60)':'#000';mctx.fillRect(px,py,step+.25,step+.25)
   }
-  // Navigation signals stay visible even inside completely unexplored black fog.
+  // Giant-monster signals stay visible even inside completely unexplored black fog.
   const pulse=.5+.5*Math.sin(performance.now()/260);
-  for(const b of enemyBases){
+  for(const b of enemyTitans){
     const x=mx(b.x),y=my(b.y);
-    if(b.alive){mctx.strokeStyle=`rgba(255,92,83,${.48+.45*pulse})`;mctx.lineWidth=1.5;mctx.beginPath();mctx.arc(x,y,5+2*pulse,0,Math.PI*2);mctx.stroke();mctx.fillStyle='#ff5f56';mctx.save();mctx.translate(x,y);mctx.rotate(Math.PI/4);mctx.fillRect(-2.7,-2.7,5.4,5.4);mctx.restore()}
+    if(b.alive){mctx.strokeStyle=`rgba(255,92,83,${.48+.45*pulse})`;mctx.lineWidth=1.7;mctx.beginPath();mctx.arc(x,y,6+3*pulse,0,Math.PI*2);mctx.stroke();mctx.fillStyle='#ff5f56';mctx.beginPath();mctx.arc(x,y,3.2,0,Math.PI*2);mctx.fill();mctx.fillStyle='#fff1dc';mctx.font='900 7px system-ui';mctx.textAlign='center';mctx.fillText('!',x,y+2.5)}
     else if(exploredAt(b.x,b.y)){mctx.fillStyle='#747974';mctx.fillRect(x-2,y-2,4,4)}
   }
   // The wreck and player are known navigation anchors.
@@ -338,13 +401,13 @@ function drawMinimap(){
 function updateHud(){
   const hp=clamp(player.hp/player.maxHp*100,0,100);$('#hpBar').style.width=`${hp}%`;$('#hpText').textContent=`${Math.ceil(player.hp)}/${Math.ceil(player.maxHp)}`;$('#karmaText').textContent=runKarma;$('#creditText').textContent=credits;
   $('#attackText').textContent=Math.round(runStats.attack);$('#defenseText').textContent=Math.round(runStats.defense);$('#speedText').textContent=Math.round(runStats.speed);
-  const remain=Math.max(0,GAME_LENGTH-gameTime);$('#timerText').textContent=finalDestroyed?`HOLD ${Math.ceil(finalHold)}`:`${Math.floor(remain/60)}:${String(Math.floor(remain%60)).padStart(2,'0')}`;$('#missionText').textContent=`STAGE ${String(stageId).padStart(2,'0')} · ${STAGE.name} · 거점 ${destroyedBases}/${enemyBases.length} · 적 ${enemies.length}`;$('#stageMiniTitle').textContent=`STAGE ${String(stageId).padStart(2,'0')}`;$('#mapSizeLabel').textContent=`${W}×${H}`;
+  const remain=Math.max(0,GAME_LENGTH-gameTime);$('#timerText').textContent=finalDestroyed?`HOLD ${Math.ceil(finalHold)}`:`${Math.floor(remain/60)}:${String(Math.floor(remain%60)).padStart(2,'0')}`;$('#missionText').textContent=`STAGE ${String(stageId).padStart(2,'0')} · ${STAGE.name} · 대형괴수 ${defeatedTitans}/${enemyTitans.length} · 적 ${enemies.length}`;$('#stageMiniTitle').textContent=`STAGE ${String(stageId).padStart(2,'0')}`;$('#mapSizeLabel').textContent=`${W}×${H}`;
   const exg=nearExchange();$('#exchangeBtn').classList.toggle('hidden',!(exg&&runKarma>0));if(exg&&runKarma>0)$('#exchangeBtn').querySelector('span').textContent=`카르마 ${runKarma} → 골드`;
   $('#stimCd').textContent=!meta.stimUnlocked?`${keyLabel(meta.settings.stimKey)} · LOCK`:(stimRemaining>0?`ACTIVE ${stimRemaining.toFixed(1)} · HP-10`:`${keyLabel(meta.settings.stimKey)} · HP-10`);$('#stimBtn').classList.toggle('cooldown',!meta.stimUnlocked||player.hp<=10);$('#stimBtn').classList.toggle('active',stimRemaining>0);
   $('#healCd').textContent='Q · 80C';$('#healBtn').classList.toggle('cooldown',credits<80||player.hp>=player.maxHp-1)
 }
 function event(text,time=1.5){$('#eventBanner').textContent=text;$('#eventBanner').classList.add('show');bannerClock=time;setTimeout(()=>{if(bannerClock<=0)$('#eventBanner').classList.remove('show')},time*1000+80)}
-function endRun(win,reason){if(ended)return;ended=true;paused=true;clearRun();const xp=Math.round(kills*.45+destroyedBases*30+(win?120:20));meta.accountXp=(meta.accountXp||0)+xp;meta.runs=(meta.runs||0)+1;if(win){meta.wins=(meta.wins||0)+1;if(!meta.completedStages.includes(stageId))meta.completedStages.push(stageId);meta.maxStageUnlocked=Math.max(meta.maxStageUnlocked,Math.min(20,stageId+1));meta.campaign={active:true,credits,attack:runStats.attack,defense:runStats.defense,speed:runStats.speed,nextStage:Math.min(20,stageId+1)}}saveMeta(meta);$('#endTitle').textContent=win?`STAGE ${stageId} 클리어`:'작전 실패';$('#endReason').textContent=win?`${reason} · 현재 공격/방어/속도와 골드는 다음 스테이지로 이어집니다.`:reason;$('#endRewards').innerHTML=`<div><span>계정 XP</span><b>+${xp}</b></div><div><span>처치</span><b>${kills}</b></div><div><span>공격 / 방어 / 속도</span><b>${runStats.attack} / ${runStats.defense} / ${runStats.speed}</b></div><div><span>보유 골드</span><b>${credits}</b></div>`;$('#endScreen').classList.remove('hidden')}
+function endRun(win,reason){if(ended)return;ended=true;paused=true;clearRun();const xp=Math.round(kills*.45+defeatedTitans*30+(win?120:20));meta.accountXp=(meta.accountXp||0)+xp;meta.runs=(meta.runs||0)+1;if(win){meta.wins=(meta.wins||0)+1;if(!meta.completedStages.includes(stageId))meta.completedStages.push(stageId);meta.maxStageUnlocked=Math.max(meta.maxStageUnlocked,Math.min(20,stageId+1));meta.campaign={active:true,credits,attack:runStats.attack,defense:runStats.defense,speed:runStats.speed,nextStage:Math.min(20,stageId+1)}}saveMeta(meta);$('#endTitle').textContent=win?`STAGE ${stageId} 클리어`:'작전 실패';$('#endReason').textContent=win?`${reason} · 현재 공격/방어/속도와 골드는 다음 스테이지로 이어집니다.`:reason;$('#endRewards').innerHTML=`<div><span>계정 XP</span><b>+${xp}</b></div><div><span>처치</span><b>${kills}</b></div><div><span>공격 / 방어 / 속도</span><b>${runStats.attack} / ${runStats.defense} / ${runStats.speed}</b></div><div><span>보유 골드</span><b>${credits}</b></div>`;$('#endScreen').classList.remove('hidden')}
 
 // ---------- INPUT / UI ----------
 $('#menuBtn').onclick=()=>openMenu();$('#closeMenuBtn').onclick=closeMenu;$('#exchangeBtn').onclick=exchange;$('#stimBtn').onclick=useStim;$('#healBtn').onclick=useHeal;
