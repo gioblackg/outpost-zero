@@ -1,5 +1,12 @@
 {
-  "name":"outpost-zero","version":"0.5.1","private":true,
-  "description":"OUTPOST ZERO V5.1 - five-stage combat prototype with persistent three-state fog",
-  "scripts":{"start":"node server.js"},"engines":{"node":">=18"}
+  "name": "outpost-zero",
+  "version": "0.5.2",
+  "private": true,
+  "description": "OUTPOST ZERO V5.2 - fine fog, enemy-base signals, escalating horde balance",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
 }

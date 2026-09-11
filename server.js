@@ -4,7 +4,7 @@ const path = require('path');
 
 const PORT = process.env.PORT || 3000;
 const ROOT = path.join(__dirname, 'public');
-const APP_VERSION = '5.1.0';
+const APP_VERSION = '5.2.0';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -38,7 +38,7 @@ const server = http.createServer((req, res) => {
 
   if ((req.url || '').split('?')[0] === '/version') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-    return res.end(JSON.stringify({ name: 'OUTPOST ZERO', version: APP_VERSION, build: '2026-09-11' }));
+    return res.end(JSON.stringify({ name: 'OUTPOST ZERO', version: APP_VERSION, build: '2026-09-12' }));
   }
 
   const filePath = safePath(req.url || '/');
