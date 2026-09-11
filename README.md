@@ -1,15 +1,18 @@
-# OUTPOST ZERO V4.0.4 — 자연형 Fog of War
+# OUTPOST ZERO V5.0.0
 
-이번 버전은 V4.0.3의 포그 표현을 다시 다듬은 핫픽스입니다.
+Season 1 combat-focused prototype. First five of twenty planned stages are implemented.
 
-## 변경 사항
-- 탐험 영역을 네모 셀로 칠하지 않고 **부드러운 원형 시야가 겹쳐지는 탐험 마스크**로 변경
-- 아직 가보지 않은 곳: 완전 검정
-- 현재 시야: 정상 밝기
-- 지나간 곳: 원래 지형 위에 검은 반투명 안개가 덮인 형태로 유지
-- 미니맵에도 동일한 탐험 마스크 반영: 미탐험은 검정, 지나간 곳은 어두운 회색/녹색, 현재 시야는 더 밝게 표시
-- 기존 V4.0.3 작전 저장 데이터도 불러오도록 호환 처리
-- 첫 화면과 게임 화면 버전 표시: **V4.0.4**
+## V5 highlights
+- Three-state fog: unseen black / current vision clear / explored memory dim and persistent
+- The minimap uses the same exploration state
+- Larger Korean UI fonts and simplified HUD layout
+- Stage 1–5 with progressively larger maps and harder enemy layouts
+- Home base is invulnerable; entering it restores HP and allows Karma exchange
+- External Karma stations begin at Stage 3
+- Emergency Heal is available from the start (Q) and costs 80 credits per use
+- Stim remains a permanent one-time unlock (default R)
+- More difficult early combat balance
+- Minimap top-right; HP/Karma/Gold bottom-left; Upgrade/Shop directly above it
 
-## 배포
-기존 GitHub 저장소에는 update ZIP 내용물을 저장소 최상위에 덮어쓴 뒤 Commit 하면 됩니다. Render 자동 배포 후 첫 화면에서 V4.0.4를 확인하세요.
+## Deploy
+Upload the project contents to the root of the existing GitHub repository and commit. Render can continue using the existing Blueprint / Web Service.

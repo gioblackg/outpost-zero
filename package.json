@@ -1,12 +1,5 @@
 {
-  "name": "outpost-zero",
-  "version": "0.4.4",
-  "private": true,
-  "description": "OUTPOST ZERO V4.0.4 - Season 1 exploration, fog of war, terrain and persistent sortie prototype",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=18"
-  }
+  "name":"outpost-zero","version":"0.5.0","private":true,
+  "description":"OUTPOST ZERO V5.0 - five-stage combat prototype with persistent three-state fog",
+  "scripts":{"start":"node server.js"},"engines":{"node":">=18"}
 }

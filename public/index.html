@@ -5,71 +5,41 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#14231b" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="/styles.css?v=4.0.4" />
-  <title>OUTPOST ZERO</title>
+  <link rel="stylesheet" href="/styles.css?v=5.0.0" />
+  <title>OUTPOST ZERO V5.0</title>
 </head>
-<body class="hub-page v4-hub">
-  <main class="v4-hub-shell">
-    <header class="v4-title-block">
-      <div class="v4-title-meta"><span class="eyebrow">OUTPOST ZERO · SEASON 1</span><span class="version-badge">V4.0.4</span></div>
-      <h1>고립</h1>
-      <p>카르마를 회수해 자신과 분대를 성장시키고, 적 지휘망을 무너뜨리세요.</p>
+<body class="hub-page">
+  <main class="hub-shell">
+    <header class="title-block">
+      <div class="title-meta"><span>OUTPOST ZERO · SEASON 1</span><b class="version-badge">V5.0.0</b></div>
+      <h1>OUTPOST ZERO</h1>
+      <p>적 거점을 파괴하고 카르마를 회수해 분대를 성장시키세요.</p>
     </header>
 
-    <section class="v4-main-menu pixel-panel">
-      <div class="v4-profile-line" id="compactProfile"></div>
+    <section class="main-card panel">
+      <div id="profileLine" class="profile-line"></div>
       <div id="resumeCard" class="resume-card hidden">
-        <div>
-          <span class="eyebrow">진행 중인 작전</span>
-          <strong id="resumeSummary">저장된 작전이 있습니다.</strong>
-        </div>
-        <a id="continueBtn" class="btn primary v4-primary" href="/game.html?resume=1">계속하기</a>
+        <div><small>진행 중인 작전</small><strong id="resumeSummary"></strong></div>
+        <a class="btn primary" href="/game.html?resume=1">계속하기</a>
       </div>
-      <a id="newRunBtn" class="btn primary v4-primary" href="/game.html?new=1">새 출격</a>
-      <div class="v4-secondary-actions">
-        <button id="growthBtn" class="btn">성장 현황</button>
-        <button id="storyBtn" class="btn">기록</button>
-      </div>
-      <div class="v4-season-progress">
-        <div><span>시즌 1 진행</span><b id="chapterProgressText">0%</b></div>
-        <div class="chapter-progress-bar"><i id="chapterProgressBar"></i></div>
-        <small id="chapterStatus">LV.1 · 승리 0회</small>
-      </div>
-      <div class="season2-lock"><b>SEASON 2 · 전초기지 복구</b><span>시즌 1 완료 후 개방</span></div>
+
+      <div class="section-title"><div><small>SEASON 1</small><h2>스테이지 선택</h2></div><b id="stageProgress">0 / 20</b></div>
+      <div id="stageGrid" class="stage-grid"></div>
+      <div class="future-stage">STAGE 6–20 · 이후 업데이트에서 순차 개방</div>
+      <div class="home-actions"><button id="growthBtn" class="btn">성장 현황</button><button id="settingsBtn" class="btn">설정</button></div>
     </section>
   </main>
 
-  <dialog id="growthDialog" class="modal pixel-panel growth-dialog">
-    <div class="section-head">
-      <div><span class="eyebrow">CHARACTER GROWTH</span><h2>성장 현황</h2></div>
-      <button id="closeGrowthBtn" class="btn small">닫기</button>
-    </div>
-    <div id="growthStats" class="growth-stats"></div>
-    <div class="chapter-goals">
-      <article><b>목표 1</b><span>계정 레벨 10 달성</span></article>
-      <article><b>목표 2</b><span>지휘기지 파괴 작전 1회 성공</span></article>
-    </div>
+  <dialog id="growthDialog" class="dialog panel">
+    <div class="dialog-head"><div><small>CHARACTER GROWTH</small><h2>성장 현황</h2></div><button id="closeGrowthBtn" class="btn small">닫기</button></div>
+    <div id="growthStats" class="growth-grid"></div>
   </dialog>
 
-  <dialog id="storyDialog" class="modal pixel-panel story-dialog-v4">
-    <div class="section-head">
-      <div><span class="eyebrow">FIELD RECORDS</span><h2>작전 기록</h2></div>
-      <button id="closeStoryBtn" class="btn small">닫기</button>
-    </div>
-    <div class="story-prologue">
-      <b>프롤로그 · 고립</b>
-      <p>통신이 끊긴 폐허에서 홀로 깨어난 생존병. 적 전투체에 남은 미확인 에너지 ‘카르마’를 회수하며 북쪽 지휘 신호의 정체를 추적한다.</p>
-    </div>
-    <div id="storyList" class="story-list"></div>
+  <dialog id="settingsDialog" class="dialog panel">
+    <div class="dialog-head"><div><small>SETTINGS</small><h2>설정</h2></div><button id="closeSettingsBtn" class="btn small">닫기</button></div>
+    <div class="setting-row"><div><b>스팀팩 단축키</b><small>기본값 R</small></div><button id="stimKeyBtn" class="btn">R</button></div><p id="keyHint" class="setting-hint hidden">원하는 키를 누르세요. ESC는 취소.</p><div class="setting-row"><div><b>효과음</b><small>전투 효과음 켜기/끄기</small></div><button id="soundSettingBtn" class="btn">켜짐</button></div>
   </dialog>
 
-  <dialog id="newRunConfirm" class="modal pixel-panel confirm-dialog-v4">
-    <span class="eyebrow">NEW SORTIE</span>
-    <h2>진행 중인 작전을 포기할까요?</h2>
-    <p>저장된 작전의 미교환 카르마와 현재 분대·강화 상태가 사라집니다.</p>
-    <div class="confirm-actions"><button id="cancelNewBtn" class="btn">취소</button><button id="confirmNewBtn" class="btn primary">새 출격</button></div>
-  </dialog>
-
-  <script type="module" src="/js/base.js?v=4.0.4"></script>
+  <script type="module" src="/js/base.js?v=5.0.0"></script>
 </body>
 </html>
