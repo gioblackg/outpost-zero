@@ -4,7 +4,7 @@ const path = require('path');
 
 const PORT = process.env.PORT || 3000;
 const ROOT = path.join(__dirname, 'public');
-const APP_VERSION = '5.2.0';
+const APP_VERSION = '5.2.1';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',

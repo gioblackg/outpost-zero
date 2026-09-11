@@ -1,4 +1,4 @@
-import { loadMeta, saveMeta, accountLevelFromXp, loadRun } from './storage.js?v=5.2.0';
+import { loadMeta, saveMeta, accountLevelFromXp, loadRun } from './storage.js?v=5.2.1';
 const $ = s => document.querySelector(s);
 const meta = loadMeta();
 const lv = accountLevelFromXp(meta.accountXp);

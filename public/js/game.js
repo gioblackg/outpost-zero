@@ -1,4 +1,4 @@
-import { loadMeta, saveMeta, loadRun, saveRun, clearRun, resetCampaign } from './storage.js?v=5.2.0';
+import { loadMeta, saveMeta, loadRun, saveRun, clearRun, resetCampaign } from './storage.js?v=5.2.1';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#gameCanvas'), ctx = canvas.getContext('2d');
@@ -84,22 +84,38 @@ function move(u,nx,ny,speed,dt){const step=speed*terrainAt(u.x,u.y).speed*dt,ox=
 function lineBlocked(x1,y1,x2,y2,ignoreBaseId=null){const n=Math.ceil(Math.hypot(x2-x1,y2-y1)/26);for(let i=1;i<n;i++){const t=i/n,x=x1+(x2-x1)*t,y=y1+(y2-y1)*t;for(const o of obstacles){if(o.type==='circle'&&Math.hypot(x-o.x,y-o.y)<o.r)return true;if(o.type==='rect'&&pointRect(x,y,o))return true}if(Math.hypot(x-wreck.x,y-wreck.y)<wreck.r*.65)return true;if(typeof enemyBases!=='undefined')for(const b of enemyBases)if(b.id!==ignoreBaseId&&b.alive&&Math.hypot(x-b.x,y-b.y)<b.r*.66)return true}return false}
 
 // ---------- THREE-STATE FOG: unexplored / remembered / visible ----------
-const FOG_CELL=6, FOG_COLS=Math.ceil(W/FOG_CELL), FOG_ROWS=Math.ceil(H/FOG_CELL);
+// V5.2.1: do NOT use a circular spotlight.  Visibility is an obstacle-aware,
+// fine-cell "squircle / tactical window" so the current clear area does not
+// read as one big round halo around the player.
+const FOG_CELL=4, FOG_COLS=Math.ceil(W/FOG_CELL), FOG_ROWS=Math.ceil(H/FOG_CELL);
 const fogExplored=new Uint8Array(FOG_COLS*FOG_ROWS), fogVisible=new Uint8Array(FOG_COLS*FOG_ROWS);
 let fogClock=0;
 const fogIdx=(cx,cy)=>cy*FOG_COLS+cx;
-function visionRadius(){return 250*(terrainAt(player.x,player.y).vision||1)}
+function visionScale(){return terrainAt(player.x,player.y).vision||1}
 function fogNoise(cx,cy){const n=Math.sin(cx*12.9898+cy*78.233+stageId*37.71)*43758.5453;return (n-Math.floor(n))*2-1}
 function updateFog(force=false){
   if(!force&&fogClock>0)return; fogClock=.075; fogVisible.fill(0);
-  const r=visionRadius(), pcx=Math.floor(player.x/FOG_CELL), pcy=Math.floor(player.y/FOG_CELL), cells=Math.ceil(r/FOG_CELL)+2;
-  for(let cy=Math.max(0,pcy-cells);cy<=Math.min(FOG_ROWS-1,pcy+cells);cy++)for(let cx=Math.max(0,pcx-cells);cx<=Math.min(FOG_COLS-1,pcx+cells);cx++){
-    const x=(cx+.5)*FOG_CELL,y=(cy+.5)*FOG_CELL,dist=Math.hypot(x-player.x,y-player.y);
-    const edge=r*(1+.045*fogNoise(cx,cy));
-    if(dist<=edge && !lineBlocked(player.x,player.y,x,y)){const i=fogIdx(cx,cy);fogVisible[i]=1;fogExplored[i]=1}
+  const scale=visionScale();
+  // Wider than tall to match the tactical camera, and intentionally NOT radial.
+  const rx=190*scale, ry=142*scale;
+  const pcx=Math.floor(player.x/FOG_CELL), pcy=Math.floor(player.y/FOG_CELL);
+  const cellsX=Math.ceil(rx/FOG_CELL)+3, cellsY=Math.ceil(ry/FOG_CELL)+3;
+  for(let cy=Math.max(0,pcy-cellsY);cy<=Math.min(FOG_ROWS-1,pcy+cellsY);cy++)for(let cx=Math.max(0,pcx-cellsX);cx<=Math.min(FOG_COLS-1,pcx+cellsX);cx++){
+    const x=(cx+.5)*FOG_CELL,y=(cy+.5)*FOG_CELL,dx=Math.abs(x-player.x),dy=Math.abs(y-player.y);
+    // Superellipse (power 4) + fixed world noise makes an organic tactical field,
+    // not a round highlighted circle.  Obstacles carve the shape further.
+    const edge=1+.055*fogNoise(cx,cy);
+    const metric=Math.pow(dx/rx,4)+Math.pow(dy/ry,4);
+    if(metric<=edge && !lineBlocked(player.x,player.y,x,y)){
+      const i=fogIdx(cx,cy);fogVisible[i]=1;fogExplored[i]=1;
+    }
   }
+  // The crashed ship is known, but only as a small remembered patch.
   const rcx=Math.floor(wreck.x/FOG_CELL),rcy=Math.floor(wreck.y/FOG_CELL);
-  for(let cy=Math.max(0,rcy-8);cy<=Math.min(FOG_ROWS-1,rcy+8);cy++)for(let cx=Math.max(0,rcx-8);cx<=Math.min(FOG_COLS-1,rcx+8);cx++)fogExplored[fogIdx(cx,cy)]=1;
+  const rr=10;
+  for(let cy=Math.max(0,rcy-rr);cy<=Math.min(FOG_ROWS-1,rcy+rr);cy++)for(let cx=Math.max(0,rcx-rr);cx<=Math.min(FOG_COLS-1,rcx+rr);cx++){
+    if(Math.abs(cx-rcx)+Math.abs(cy-rcy)<=rr*1.35)fogExplored[fogIdx(cx,cy)]=1;
+  }
 }
 function visibleAt(x,y){const cx=Math.floor(x/FOG_CELL),cy=Math.floor(y/FOG_CELL);return cx>=0&&cy>=0&&cx<FOG_COLS&&cy<FOG_ROWS&&fogVisible[fogIdx(cx,cy)]===1}
 function exploredAt(x,y){const cx=Math.floor(x/FOG_CELL),cy=Math.floor(y/FOG_CELL);return cx>=0&&cy>=0&&cx<FOG_COLS&&cy<FOG_ROWS&&fogExplored[fogIdx(cx,cy)]===1}
@@ -126,7 +142,10 @@ function drawFog(){
   for(let cy=y0;cy<=y1;cy++)for(let cx=x0;cx<=x1;cx++){
     const i=fogIdx(cx,cy);if(fogVisible[i])continue;
     const px=cx*FOG_CELL-left,py=cy*FOG_CELL-top;
-    ctx.fillStyle=fogExplored[i]?'rgba(7,10,8,.66)':'#000';ctx.fillRect(px,py,FOG_CELL+.45,FOG_CELL+.45);
+    // Remembered terrain keeps the exact underlying world image and is only dimmed.
+    // Unknown terrain is fully black.
+    ctx.fillStyle=fogExplored[i]?'rgba(3,5,4,.70)':'#000';
+    ctx.fillRect(px,py,FOG_CELL+.35,FOG_CELL+.35);
   }
   ctx.restore();
 }
